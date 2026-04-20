@@ -13,10 +13,15 @@ public:
     std::string currentmap;
     std::vector<int> testmap1iniplace;
     std::vector<int> testmap2iniplace;
+    bool consolePrepared;
 
 public:
     MapDrawer();
+    ~MapDrawer();
     void draw();
+
+private:
+    void prepareConsole();
 
 };
 

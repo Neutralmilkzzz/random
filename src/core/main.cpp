@@ -4,9 +4,9 @@
 
 
 #include <thread>
-#include "MapDrawer.h"
-#include "Player.h"
-#include "KeyStateManager.h"
+#include "world/MapDrawer.h"
+#include "player/Player.h"
+#include "input/KeyStateManager.h"
 
 int main(){
     MapDrawer mapDrawer1;
@@ -18,6 +18,9 @@ int main(){
     while(true){
         ksm.clearKeys();
         ksm.readKeys();
+        if (ksm.keyStates[0x1B]) {
+            break;
+        }
         Player1.move(mapDrawer1.currentmap);
         mapDrawer1.draw();
         std::this_thread::sleep_for(std::chrono::milliseconds(16/*16*/));

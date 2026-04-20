@@ -1,14 +1,31 @@
-#include "Player.h"
-#include "KeyStateManager.h"
+#include "player/Player.h"
 
 Player::Player(KeyStateManager& ksm1)  : ksm(ksm1){
     isJumping = false;
     jumpProgress = 0;
-    jumpHeight = 5;  // 跳跃总高度4格
+    jumpHeight = 4;
     jumpFrameCounter = 0;
     gravityFrameCounter = 0;
+    moveFrameCounter = 0;
+    groundedMoveInterval = 3;
+    airborneMoveInterval = 4;
+    jumpRiseInterval = 4;
+    jumpApexInterval = 6;
+    gravityInterval = 3;
 }
 
+bool Player::isGrounded(const std::string &currentmap, size_t pos) {
+    size_t newlinePos = currentmap.find('\n');
+    if (newlinePos == std::string::npos) return false;
+    size_t lineWidth = newlinePos + 1;
+    size_t belowPos = pos + lineWidth;
+
+    if (belowPos >= currentmap.length()) {
+        return false;
+    }
+
+    return currentmap[belowPos] != ' ';
+}
 
 bool Player::applyGravity(std::string &currentmap, size_t pos) {
     // 计算行宽
@@ -59,87 +76,90 @@ bool Player::jumpUp(std::string &currentmap, size_t pos) {
 void Player::move(std::string &currentmap) {
     // 先找到玩家位置
     size_t pos = currentmap.find('@');
-    // 计算行宽（用于垂直移动检查）
-    size_t newlinePos = currentmap.find('\n');
-    size_t lineWidth = newlinePos + 1;
+    if (pos == std::string::npos) {
+        return;
+    }
+    bool movingLeft = ksm.keyStates['a'] || ksm.keyStates['A'];
+    bool movingRight = ksm.keyStates['d'] || ksm.keyStates['D'];
+    bool grounded = isGrounded(currentmap, pos);
 
     // 第一步：水平移动
-    // 向左移动检查（同时检查大小写）
-    if (ksm.keyStates['a'] || ksm.keyStates['A']) {
-        // 检查左边是否是空格，并且左边不是换行符
-        if (pos > 0 && currentmap[pos - 1] == ' ') {
-            std::swap(currentmap[pos], currentmap[pos - 1]);
-            pos = pos - 1;  // 更新位置
+    if (movingLeft != movingRight) {
+        moveFrameCounter++;
+        int moveInterval = grounded ? groundedMoveInterval : airborneMoveInterval;
+
+        if (moveFrameCounter >= moveInterval) {
+            moveFrameCounter = 0;
+
+            if (movingLeft && pos > 0 && currentmap[pos - 1] == ' ') {
+                std::swap(currentmap[pos], currentmap[pos - 1]);
+                pos = pos - 1;
+            } else if (movingRight && pos + 1 < currentmap.length() && currentmap[pos + 1] == ' ') {
+                std::swap(currentmap[pos], currentmap[pos + 1]);
+                pos = pos + 1;
+            }
         }
+    } else {
+        moveFrameCounter = 0;
     }
 
     pos = currentmap.find('@');
-    // 向右移动检查（同时检查大小写）
-    if (ksm.keyStates['d'] || ksm.keyStates['D']) {
-        // 检查右边是否是空格，并且右边不是换行符
-        if (pos + 1 < currentmap.length() && currentmap[pos + 1] == ' ') {
-            std::swap(currentmap[pos], currentmap[pos + 1]);
-            pos = pos + 1;  // 更新位置
-        }
-    }
+    grounded = isGrounded(currentmap, pos);
 
-    pos = currentmap.find('@');
     // 第二步：处理跳跃（检查空格键）
     if (ksm.keyStates[' '] && !isJumping) {
-        // 检查是否在地面上
-        size_t belowPos = pos + lineWidth;
-
-        // 如果下方不是空格（即在地面上），才能起跳
-        if (belowPos < currentmap.length() && currentmap[belowPos] != ' ') {
+        if (grounded) {
             isJumping = true;
             jumpProgress = jumpHeight;
             jumpFrameCounter = 0;
-            gravityFrameCounter = 0;  // 重置重力计数器
+            gravityFrameCounter = 0;
         }
     }
 
     pos = currentmap.find('@');
     // 第三步：处理跳跃状态
     if (isJumping) {
-        // 跳跃期间：每5帧上升1格
         jumpFrameCounter++;
 
-        if (jumpFrameCounter >= 6) {
+        int riseInterval = jumpProgress <= 1 ? jumpApexInterval : jumpRiseInterval;
+        if (jumpFrameCounter >= riseInterval) {
             jumpFrameCounter = 0;
 
             if (jumpProgress > 0) {
-                // 尝试上升
                 size_t currentPos = currentmap.find('@');
                 if (currentPos != std::string::npos) {
                     if (jumpUp(currentmap, currentPos)) {
-                        jumpProgress--;  // 成功上升
+                        jumpProgress--;
                     } else {
-                        // 碰到天花板，结束跳跃
                         isJumping = false;
                         jumpProgress = 0;
                         gravityFrameCounter = 0;
                     }
                 }
             } else {
-                // 跳跃上升阶段结束
                 isJumping = false;
                 gravityFrameCounter = 0;
             }
         }
     }
+
     pos = currentmap.find('@');
     // 第四步：非跳跃状态下应用重力
     if (!isJumping) {
-        gravityFrameCounter++;
+        grounded = isGrounded(currentmap, pos);
 
-        if (gravityFrameCounter >= 8) {
-            gravityFrameCounter = 0;
+        if (!grounded) {
+            gravityFrameCounter++;
 
-            size_t currentPos = currentmap.find('@');
-            if (currentPos != std::string::npos) {
-                // 尝试下落
-                applyGravity(currentmap, currentPos);
+            if (gravityFrameCounter >= gravityInterval) {
+                gravityFrameCounter = 0;
+                size_t currentPos = currentmap.find('@');
+                if (currentPos != std::string::npos) {
+                    applyGravity(currentmap, currentPos);
+                }
             }
+        } else {
+            gravityFrameCounter = 0;
         }
     }
 }

@@ -12,7 +12,7 @@ if errorlevel 1 (
 )
 
 echo [1/2] Compiling...
-g++ -std=c++11 -Wall -Wextra -O2 main.cpp Player.cpp MapDrawer.cpp KeyStateManager.cpp -o testcpp1.exe
+g++ -std=c++11 -Wall -Wextra -O2 -Iinclude src\core\main.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp -o testcpp1.exe
 if errorlevel 1 (
     echo.
     echo [ERROR] Build failed.

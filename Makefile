@@ -1,26 +1,46 @@
 # 编译器设置
 CXX = g++
-CXXFLAGS = -std=c++11 -Wall -Wextra -O2
+CXXFLAGS = -std=c++11 -Wall -Wextra -O2 -Iinclude
 LDFLAGS =
 
 # 目标可执行文件（根据平台自动设置后缀）
 ifeq ($(OS),Windows_NT)
     TARGET = testcpp1.exe
+    PLAYER_SANDBOX_TARGET = player_sandbox.exe
+    SKILL_SANDBOX_TARGET = skill_sandbox.exe
+    COMBAT_SANDBOX_TARGET = combat_sandbox.exe
+    WORLD_SANDBOX_TARGET = world_sandbox.exe
 else
     TARGET = testcpp1
+    PLAYER_SANDBOX_TARGET = player_sandbox
+    SKILL_SANDBOX_TARGET = skill_sandbox
+    COMBAT_SANDBOX_TARGET = combat_sandbox
+    WORLD_SANDBOX_TARGET = world_sandbox
 endif
 
+# 可复用源文件
+RUNTIME_SRCS = src/player/Player.cpp \
+               src/world/MapDrawer.cpp \
+               src/input/KeyStateManager.cpp
+
 # 源文件
-SRCS = main.cpp \
-       Player.cpp \
-       MapDrawer.cpp \
-       KeyStateManager.cpp
+SRCS = src/core/main.cpp \
+       $(RUNTIME_SRCS)
 
 # 头文件
-HEADERS = Player.h \
-          MapDrawer.h \
-          KeyStateManager.h \
-          plan.h
+HEADERS = include/player/Player.h \
+          include/world/MapDrawer.h \
+          include/input/KeyStateManager.h \
+          include/shared/GameTypes.h \
+          include/combat/CombatSystem.h \
+          include/combat/SkillSystem.h \
+          include/enemy/Enemy.h \
+          include/world/WorldSystem.h \
+          include/save/SaveSystem.h \
+          include/npc/NpcSystem.h \
+          include/event/EventSystem.h \
+          include/core/GameSession.h \
+          include/shared/plan.h
 
 # 对象文件
 OBJS = $(SRCS:.cpp=.o)
@@ -28,9 +48,24 @@ OBJS = $(SRCS:.cpp=.o)
 # 默认目标
 all: $(TARGET)
 
+# 沙盒集合
+sandboxes: $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET)
+
 # 链接可执行文件
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(PLAYER_SANDBOX_TARGET): src/sandbox/PlayerSandbox.cpp $(RUNTIME_SRCS) $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/PlayerSandbox.cpp $(RUNTIME_SRCS) $(LDFLAGS)
+
+$(SKILL_SANDBOX_TARGET): src/sandbox/SkillSandbox.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/SkillSandbox.cpp $(LDFLAGS)
+
+$(COMBAT_SANDBOX_TARGET): src/sandbox/CombatSandbox.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/CombatSandbox.cpp $(LDFLAGS)
+
+$(WORLD_SANDBOX_TARGET): src/sandbox/WorldSandbox.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/WorldSandbox.cpp $(LDFLAGS)
 
 # 编译源文件
 %.o: %.cpp $(HEADERS)
@@ -39,10 +74,14 @@ $(TARGET): $(OBJS)
 # 平台无关的清理命令
 clean:
 ifeq ($(OS),Windows_NT)
-	@if exist *.o del /Q *.o 2>nul
+	@powershell -NoProfile -Command "Get-ChildItem -Path src -Recurse -Filter *.o -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue"
 	@if exist $(TARGET) del /Q $(TARGET) 2>nul
+	@if exist $(PLAYER_SANDBOX_TARGET) del /Q $(PLAYER_SANDBOX_TARGET) 2>nul
+	@if exist $(SKILL_SANDBOX_TARGET) del /Q $(SKILL_SANDBOX_TARGET) 2>nul
+	@if exist $(COMBAT_SANDBOX_TARGET) del /Q $(COMBAT_SANDBOX_TARGET) 2>nul
+	@if exist $(WORLD_SANDBOX_TARGET) del /Q $(WORLD_SANDBOX_TARGET) 2>nul
 else
-	@rm -f $(OBJS) $(TARGET) 2>/dev/null || true
+	@rm -f $(OBJS) $(TARGET) $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) 2>/dev/null || true
 endif
 	@echo "清理完成"
 
@@ -57,6 +96,34 @@ ifeq ($(OS),Windows_NT)
 else
 	@echo "运行程序..."
 	@./$(TARGET)
+endif
+
+run-player-sandbox: $(PLAYER_SANDBOX_TARGET)
+ifneq ($(OS),Windows_NT)
+	@./$(PLAYER_SANDBOX_TARGET)
+else
+	@$(PLAYER_SANDBOX_TARGET)
+endif
+
+run-skill-sandbox: $(SKILL_SANDBOX_TARGET)
+ifneq ($(OS),Windows_NT)
+	@./$(SKILL_SANDBOX_TARGET)
+else
+	@$(SKILL_SANDBOX_TARGET)
+endif
+
+run-combat-sandbox: $(COMBAT_SANDBOX_TARGET)
+ifneq ($(OS),Windows_NT)
+	@./$(COMBAT_SANDBOX_TARGET)
+else
+	@$(COMBAT_SANDBOX_TARGET)
+endif
+
+run-world-sandbox: $(WORLD_SANDBOX_TARGET)
+ifneq ($(OS),Windows_NT)
+	@./$(WORLD_SANDBOX_TARGET)
+else
+	@$(WORLD_SANDBOX_TARGET)
 endif
 
 # 调试模式
@@ -79,8 +146,13 @@ help:
 	@echo "  make clean   - 清理生成的文件"
 	@echo "  make rebuild - 重新编译"
 	@echo "  make run     - 编译并运行"
+	@echo "  make sandboxes           - 编译全部沙盒"
+	@echo "  make run-player-sandbox  - 运行玩家沙盒"
+	@echo "  make run-skill-sandbox   - 运行技能沙盒"
+	@echo "  make run-combat-sandbox  - 运行战斗沙盒"
+	@echo "  make run-world-sandbox   - 运行世界沙盒"
 	@echo "  make debug   - 编译调试版本"
 	@echo "  make info    - 显示项目信息"
 
 # 伪目标
-.PHONY: all clean rebuild run debug info help
+.PHONY: all sandboxes clean rebuild run run-player-sandbox run-skill-sandbox run-combat-sandbox run-world-sandbox debug info help

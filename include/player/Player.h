@@ -8,8 +8,7 @@
 
 #include <vector>
 #include <string>
-#include "trash/KeyBoard.h"
-#include "KeyStateManager.h"
+#include "input/KeyStateManager.h"
 
 class Player {
 public:
@@ -19,9 +18,15 @@ public:
 private:
     bool isJumping;      // 是否正在跳跃
     int jumpProgress;    // 跳跃进度（剩余上升次数）
-    int jumpHeight;      // 跳跃总高度（4格）
-    int jumpFrameCounter; // 跳跃帧计数器（用于每3帧上升1格）
-    int gravityFrameCounter; // 重力帧计数器（用于每4帧下落1格）
+    int jumpHeight;      // 跳跃总高度
+    int jumpFrameCounter; // 跳跃帧计数器
+    int gravityFrameCounter; // 重力帧计数器
+    int moveFrameCounter; // 水平移动帧计数器
+    int groundedMoveInterval; // 地面移动间隔
+    int airborneMoveInterval; // 空中移动间隔
+    int jumpRiseInterval; // 上升间隔
+    int jumpApexInterval; // 接近最高点时的上升间隔
+    int gravityInterval; // 下落间隔
 
 public:
     Player(KeyStateManager& ksm);
@@ -31,6 +36,7 @@ public:
     void move(std::string &currentmap);
 
     // 辅助函数
+    bool isGrounded(const std::string &currentmap, size_t pos);
     bool applyGravity(std::string &currentmap, size_t pos);  // 返回是否下落了
     bool jumpUp(std::string &currentmap, size_t pos);        // 返回是否上升了
 };
