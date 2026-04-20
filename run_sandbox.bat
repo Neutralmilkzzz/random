@@ -12,7 +12,7 @@ if errorlevel 1 (
 
 set "SANDBOX=%~1"
 if "%SANDBOX%"=="" (
-    echo Usage: run_sandbox.bat [player^|skill^|combat^|world]
+    echo Usage: run_sandbox.bat [player^|skill^|combat^|enemy^|world]
     echo Example: run_sandbox.bat player
     pause
     exit /b 1
@@ -38,6 +38,12 @@ if /I "%SANDBOX%"=="combat" (
     set "ENTRY=src\sandbox\CombatSandbox.cpp"
 )
 
+if /I "%SANDBOX%"=="enemy" (
+    set "TARGET=enemy_sandbox.exe"
+    set "ENTRY=src\sandbox\EnemySandbox.cpp"
+    set "EXTRA_SRCS=src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
+)
+
 if /I "%SANDBOX%"=="world" (
     set "TARGET=world_sandbox.exe"
     set "ENTRY=src\sandbox\WorldSandbox.cpp"
@@ -45,7 +51,7 @@ if /I "%SANDBOX%"=="world" (
 
 if "%ENTRY%"=="" (
     echo [ERROR] Unknown sandbox: %SANDBOX%
-    echo Available: player, skill, combat, world
+    echo Available: player, skill, combat, enemy, world
     pause
     exit /b 1
 )

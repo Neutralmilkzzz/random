@@ -17,15 +17,28 @@ static bool terminal_configured = false;
 
 void KeyStateManager::readKeys() {
 #ifdef _WIN32
-    // Windows: 直接检测按键状态
-    keyStates['a'] = (GetAsyncKeyState('A') & 0x8000) != 0;
-    keyStates['A'] = keyStates['a'];
-    keyStates['d'] = (GetAsyncKeyState('D') & 0x8000) != 0;
-    keyStates['D'] = keyStates['d'];
-    keyStates['w'] = (GetAsyncKeyState('W') & 0x8000) != 0;
-    keyStates['W'] = keyStates['w'];
-    keyStates['s'] = (GetAsyncKeyState('S') & 0x8000) != 0;
-    keyStates['S'] = keyStates['s'];
+    const char watchedLetters[] = {
+            'A', 'C', 'D', 'W', 'S',
+            'J', 'I', 'K', 'L',
+            'O', 'M', 'R', 'H',
+            'P'
+    };
+    const char watchedDigits[] = {'1', '2', '3'};
+
+    for (size_t index = 0; index < sizeof(watchedLetters) / sizeof(watchedLetters[0]); ++index) {
+        const char uppercase = watchedLetters[index];
+        const char lowercase = static_cast<char>(uppercase + ('a' - 'A'));
+        const bool pressed = (GetAsyncKeyState(uppercase) & 0x8000) != 0;
+
+        keyStates[uppercase] = pressed;
+        keyStates[lowercase] = pressed;
+    }
+
+    for (size_t index = 0; index < sizeof(watchedDigits) / sizeof(watchedDigits[0]); ++index) {
+        const char digit = watchedDigits[index];
+        keyStates[digit] = (GetAsyncKeyState(digit) & 0x8000) != 0;
+    }
+
     keyStates[' '] = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
     keyStates[0x1B] = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
 #else

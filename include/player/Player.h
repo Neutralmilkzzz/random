@@ -16,17 +16,15 @@ public:
     KeyStateManager& ksm;
 
 private:
-    bool isJumping;      // 是否正在跳跃
-    int jumpProgress;    // 跳跃进度（剩余上升次数）
-    int jumpHeight;      // 跳跃总高度
-    int jumpFrameCounter; // 跳跃帧计数器
-    int gravityFrameCounter; // 重力帧计数器
-    int moveFrameCounter; // 水平移动帧计数器
-    int groundedMoveInterval; // 地面移动间隔
-    int airborneMoveInterval; // 空中移动间隔
-    int jumpRiseInterval; // 上升间隔
-    int jumpApexInterval; // 接近最高点时的上升间隔
-    int gravityInterval; // 下落间隔
+    bool isJumping;
+    bool jumpHeldLastFrame;
+    float horizontalMoveAccumulator;
+    float verticalMoveAccumulator;
+    float upwardVelocity;
+    float downwardVelocity;
+    float jumpHoldRemaining;
+    float minimumJumpRiseRemaining;
+    float riseVelocityDropAccumulator;
 
 public:
     Player(KeyStateManager& ksm);

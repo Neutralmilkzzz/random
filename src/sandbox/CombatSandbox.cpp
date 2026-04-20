@@ -6,7 +6,7 @@ int main() {
     game::AttackDefinition basicAttack;
     basicAttack.id = "player_basic_attack";
     basicAttack.damage = game::DamageInfo(1, game::DamageType::BasicAttack, "player", true);
-    basicAttack.soulGainOnHit = 20;
+    basicAttack.soulGainOnHit = 11;
     basicAttack.startupSeconds = 0.10f;
     basicAttack.activeSeconds = 0.12f;
     basicAttack.recoverySeconds = 0.20f;

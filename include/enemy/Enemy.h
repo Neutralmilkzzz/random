@@ -14,6 +14,16 @@ enum class EnemyType {
     BossRanged
 };
 
+enum class GroundEnemyState {
+    Idle,
+    Chase,
+    AttackStartup,
+    DashAttack,
+    AttackRecovery,
+    ReturnToPost,
+    Dead
+};
+
 class Enemy : public CombatActor {
 public:
     virtual ~Enemy() = default;
@@ -26,10 +36,60 @@ public:
 
 class GroundEnemy : public Enemy {
 public:
+    GroundEnemy(const std::string& enemyId = "ground_enemy",
+                const Position& spawnPosition = Position());
+
+    const std::string& getId() const override;
+    Position getPosition() const override;
+    FacingDirection getFacingDirection() const override;
+    const CharacterStats& getStats() const override;
+    CharacterStats& accessStats() override;
+    HitFeedbackState& accessHitFeedback() override;
+    void takeDamage(const DamageInfo& damageInfo) override;
+    bool isAlive() const override;
+
     EnemyType getEnemyType() const override;
     void updateAI(const Position& playerPosition, float deltaSeconds) override;
     AttackDefinition getPrimaryAttack() const override;
     int getHkdReward() const override;
+
+    void setPosition(const Position& newPosition);
+    void setSpawnPosition(const Position& newSpawnPosition);
+    Position getSpawnPosition() const;
+    GroundEnemyState getState() const;
+    bool isAggroed() const;
+    bool isTouchingPlayer(const Position& playerPosition) const;
+    bool isInAttackRange(const Position& playerPosition) const;
+    bool consumeAttackTrigger();
+
+private:
+    void updateHitFeedback(float deltaSeconds);
+    void moveTowardX(int targetX, float deltaSeconds);
+    void startAttack();
+    void startDashAttack(const Position& playerPosition);
+
+    std::string id;
+    Position position;
+    Position spawnPosition;
+    FacingDirection facingDirection;
+    CharacterStats stats;
+    HitFeedbackState hitFeedback;
+    GroundEnemyState state;
+    bool alive;
+    bool attackTriggerQueued;
+    float moveAccumulator;
+    float attackStartupRemaining;
+    float attackRecoveryRemaining;
+    float aggroRange;
+    float loseAggroRange;
+    float alertRange;
+    float attackRange;
+    float moveStepSeconds;
+    float attackStartupSeconds;
+    float dashStepSeconds;
+    float attackRecoverySeconds;
+    int dashStepsRemaining;
+    float dashAccumulator;
 };
 
 class FlyingEnemy : public Enemy {

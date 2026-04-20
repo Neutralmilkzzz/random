@@ -85,7 +85,7 @@ struct CharacterStats {
 
     CharacterStats()
         : health(5, 5),
-          soul(0, 100),
+          soul(0, 99),
           hkd(0),
           attackPower(1),
           attackSpeedLevel(1),

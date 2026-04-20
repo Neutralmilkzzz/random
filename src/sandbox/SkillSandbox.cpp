@@ -34,12 +34,10 @@ const char* skillName(game::SkillId skillId) {
 int soulCost(game::SkillId skillId) {
     switch (skillId) {
         case game::SkillId::SoulWaveHorizontal:
-            return 10;
         case game::SkillId::SoulWaveUp:
         case game::SkillId::SoulSlam:
-            return 20;
         case game::SkillId::Heal:
-            return 30;
+            return 33;
         default:
             return 0;
     }
@@ -49,7 +47,7 @@ int soulCost(game::SkillId skillId) {
 
 int main() {
     game::CharacterStats stats;
-    stats.soul.current = 100;
+    stats.soul.current = stats.soul.maximum;
 
     const std::vector<game::SkillId> skills = {
         game::SkillId::BasicAttack,

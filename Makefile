@@ -9,12 +9,14 @@ ifeq ($(OS),Windows_NT)
     PLAYER_SANDBOX_TARGET = player_sandbox.exe
     SKILL_SANDBOX_TARGET = skill_sandbox.exe
     COMBAT_SANDBOX_TARGET = combat_sandbox.exe
+    ENEMY_SANDBOX_TARGET = enemy_sandbox.exe
     WORLD_SANDBOX_TARGET = world_sandbox.exe
 else
     TARGET = testcpp1
     PLAYER_SANDBOX_TARGET = player_sandbox
     SKILL_SANDBOX_TARGET = skill_sandbox
     COMBAT_SANDBOX_TARGET = combat_sandbox
+    ENEMY_SANDBOX_TARGET = enemy_sandbox
     WORLD_SANDBOX_TARGET = world_sandbox
 endif
 
@@ -49,7 +51,7 @@ OBJS = $(SRCS:.cpp=.o)
 all: $(TARGET)
 
 # 沙盒集合
-sandboxes: $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET)
+sandboxes: $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET)
 
 # 链接可执行文件
 $(TARGET): $(OBJS)
@@ -63,6 +65,9 @@ $(SKILL_SANDBOX_TARGET): src/sandbox/SkillSandbox.cpp $(HEADERS)
 
 $(COMBAT_SANDBOX_TARGET): src/sandbox/CombatSandbox.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/CombatSandbox.cpp $(LDFLAGS)
+
+$(ENEMY_SANDBOX_TARGET): src/sandbox/EnemySandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/EnemySandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
 
 $(WORLD_SANDBOX_TARGET): src/sandbox/WorldSandbox.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/WorldSandbox.cpp $(LDFLAGS)
@@ -79,9 +84,10 @@ ifeq ($(OS),Windows_NT)
 	@if exist $(PLAYER_SANDBOX_TARGET) del /Q $(PLAYER_SANDBOX_TARGET) 2>nul
 	@if exist $(SKILL_SANDBOX_TARGET) del /Q $(SKILL_SANDBOX_TARGET) 2>nul
 	@if exist $(COMBAT_SANDBOX_TARGET) del /Q $(COMBAT_SANDBOX_TARGET) 2>nul
+	@if exist $(ENEMY_SANDBOX_TARGET) del /Q $(ENEMY_SANDBOX_TARGET) 2>nul
 	@if exist $(WORLD_SANDBOX_TARGET) del /Q $(WORLD_SANDBOX_TARGET) 2>nul
 else
-	@rm -f $(OBJS) $(TARGET) $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) 2>/dev/null || true
+	@rm -f $(OBJS) $(TARGET) $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) 2>/dev/null || true
 endif
 	@echo "清理完成"
 
@@ -119,6 +125,13 @@ else
 	@$(COMBAT_SANDBOX_TARGET)
 endif
 
+run-enemy-sandbox: $(ENEMY_SANDBOX_TARGET)
+ifneq ($(OS),Windows_NT)
+	@./$(ENEMY_SANDBOX_TARGET)
+else
+	@$(ENEMY_SANDBOX_TARGET)
+endif
+
 run-world-sandbox: $(WORLD_SANDBOX_TARGET)
 ifneq ($(OS),Windows_NT)
 	@./$(WORLD_SANDBOX_TARGET)
@@ -150,9 +163,10 @@ help:
 	@echo "  make run-player-sandbox  - 运行玩家沙盒"
 	@echo "  make run-skill-sandbox   - 运行技能沙盒"
 	@echo "  make run-combat-sandbox  - 运行战斗沙盒"
+	@echo "  make run-enemy-sandbox   - 运行敌人沙盒"
 	@echo "  make run-world-sandbox   - 运行世界沙盒"
 	@echo "  make debug   - 编译调试版本"
 	@echo "  make info    - 显示项目信息"
 
 # 伪目标
-.PHONY: all sandboxes clean rebuild run run-player-sandbox run-skill-sandbox run-combat-sandbox run-world-sandbox debug info help
+.PHONY: all sandboxes clean rebuild run run-player-sandbox run-skill-sandbox run-combat-sandbox run-enemy-sandbox run-world-sandbox debug info help
