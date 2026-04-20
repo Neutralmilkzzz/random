@@ -1,0 +1,24 @@
+//
+// Created by ender on 2026/4/20.
+//
+
+#ifndef TESTCPP1_MAPDRAWER_H
+#define TESTCPP1_MAPDRAWER_H
+
+#include <vector>
+#include <string>
+
+class MapDrawer {
+public:
+    std::string currentmap;
+    std::vector<int> testmap1iniplace;
+    std::vector<int> testmap2iniplace;
+
+public:
+    MapDrawer();
+    void draw();
+
+};
+
+
+#endif //TESTCPP1_MAPDRAWER_H
