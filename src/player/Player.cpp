@@ -224,7 +224,7 @@ void Player::resetRuntimeState() {
     projectiles.clear();
     previousKeys.clear();
     lastAction = "Ready";
-    lastResult = "Move with A/D, jump with SPACE, dash with SHIFT.";
+    lastResult = std::string("Move with A/D, jump with SPACE, dash with ") + runtimeDashKeyLabel() + ".";
     resetQueued = false;
 }
 
@@ -288,7 +288,7 @@ void Player::move(std::string& currentmap) {
     const bool movingRight = isKeyDown('d') || isKeyDown('D');
     const bool jumpHeld = isKeyDown(' ');
     const bool jumpJustPressed = jumpHeld && !jumpHeldLastFrame;
-    const bool dashJustPressed = isJustPressed(0x10);
+    const bool dashJustPressed = isJustPressed(runtimeDashKeyCode());
 
     bool grounded = isGrounded(currentmap, pos);
 

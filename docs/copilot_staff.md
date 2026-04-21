@@ -18,7 +18,7 @@
 | Copilot 名称 | Resume | 负责模块 | 当前状态 | 最新进展 | 阻塞 | 接手人 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Copilot CLI（GPT-5.4） | `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 项目结构、构建入口、沙盒、地面敌人、飞行敌人原型、Boss 原型 / `CombatSystem`、参数文档、`module_02 / module_04` 地图细化、Soul HUD 修复 | 已完成（本轮交付） | 已完成 Boss demo 下沉到 `Enemy.*`、`CombatSystem` 最小结算接口与相关文档：`boss-demo-into-enemy`、`combat-resolver-implement`、`combat-resolver-docs` 均已 done；主流程位现可直接读取 Boss 状态、攻击信号与一次性击杀奖励 | 仅剩 `combat-resolver-design` 处于 blocked，且该项原本就依赖别的 AI 先完成 `PlayerSandbox` 相关改动，不属于本轮未收尾项 | 下一位接手主流程接线、Boss 正式接入或继续补完整 Battle loop 的 Copilot |
-| Copilot CLI（GPT-5.4） | copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd | 技能/攻击 ASCII 表现设计、法术分镜、显示语义约定、Player dash 动画 | 进行中 | 已补充左右冲击波、下砸、普通攻击缺口、敌人受伤/死亡、HKD/HUD 与 `YOU DEAD` 白屏死亡演出的 ASCII 方案；本轮补了主线 `SHIFT` dash 的简易拖尾动画，让冲刺时有明显位移感 | 无 | 下一位接手技能正式渲染接入、玩家攻击判定、进一步战斗手感优化或死亡演出落地的 Copilot |
+| Copilot CLI（GPT-5.4） | copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd | 技能/攻击 ASCII 表现设计、法术分镜、显示语义约定、Player dash 动画、Linux/macOS 主线适配、README 下载/运行说明 | 进行中 | 已补充左右冲击波、下砸、普通攻击缺口、敌人受伤/死亡、HKD/HUD 与 `YOU DEAD` 白屏死亡演出的 ASCII 方案；已补主线 `SHIFT` dash 简易拖尾；当前正把主线输入 / 提示 / 文档同步到 Linux/macOS，并按用户要求将非 Windows dash 改为 `Q` | 无 | 下一位接手技能正式渲染接入、玩家攻击判定、跨平台沙盒提示同步或进一步战斗手感优化的 Copilot |
 | Copilot CLI（GPT-5.4） | `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 玩家沙盒、敌人沙盒、MapDrawer 渲染、参数同步、主线 Player 接入、`module_01 / module_03` 地图细化、主菜单 / 存档最小闭环、捷径门持久化解锁、二段跳 / 普通 dash、Boss 房主流程接线 / 入场对话 / 胜利结算 | 已完成 | 已完成玩家攻击/法术/HUD/`YOU DEAD` 死亡演出接入主线 `Player.cpp`，改成 `W/S` + `J/K` 组合键映射，并细化 `module_01`、`module_03`；已补完 `NEW GAME` / `CONTINUE` / 最小存档闭环与捷径门持久化解锁；现已把普通横向 dash 定为默认 `SHIFT`，并将二段跳改成商人售卖、购买后随存档持久化的能力；本轮已把 `boss_room_01` 接成“进房对白 -> 开战 -> Boss 死亡 -> VICTORY 结算”的主流程闭环，并保持死亡恢复链路可复用 | 无 | 下一个负责玩家状态机、击退、主线战斗、固定存档点、Boss 收尾 polish 或整线跑图验证的人 |
 | Copilot CLI（GPT-5.4） | ` copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 参数整理、调参文档、员工文档、进度盘点、地图仓库、`NpcSystem` 最小交互、主界面 HUD 精简、`boss_room_01` 决战房收口、战斗手感回归验证 | 进行中 | 已完成基础参数归档、员工登记表建立与 resume 对应、8 张白盒地图 + `testcpp1` 主线接线、地图分工表；已细化 `spawn_village` / `random_event_01`，修复 `module_02` 入口卡墙与 `module_01` 边界破损；已落地 `NpcSystem` 最小交互模块，并把主界面改成顶部极简 HUD + 底部常驻操作说明，现已把 `NpcSystem` 正式接进 `main.cpp` 运行时，支持 `E` 交互 / `W/S` 选项 / `J` 购买，并补齐 `Makefile` / `run.bat` 构建项；本轮按最新地图重构任务重做了 `module_05`，并已把 `boss_room_01` 收成右侧入场缓冲 + 中左部开阔主战场的决战房骨架，保留门位、不放杂兵，为 Boss 对话和胜利结算预留空间；夜间回归复核后确认：上下法术判定范围已扩大并能编译通过，但“地面敌人冲刺后贴地”和“上/下劈砍命中加 Soul”两项在当前仓库代码中仍未真正落地 | 待对应代码负责人补完剩余 2 项后，再做一次整线复核并关闭战斗手感插单 | 下一位接手 `Enemy.*` / `Player.*` 剩余两项修复，或在代码修复后继续补最终验证记录的 Copilot |
 
@@ -60,6 +60,30 @@
 | 2026-04-21 | Copilot CLI（GPT-5.4） | 战斗手感优化插单下发 | 已完成 | 记录用户实机发现的 3 个问题：`g` 地面敌人冲刺后可能浮空、上下劈砍未增加 Soul、上下法术判定范围偏小；并按不抢文件的原则拆给 3 个 AI 分开优化 | 3 位负责人各自认领并行推进 | 本轮要求优先做最小可感知优化，不顺手扩大成全面重构 |
 | 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 战斗手感插单回归验证 / 文档回填 | 已完成 | 只读当前仓库代码并重新编译 `player_sandbox.exe`、`enemy_sandbox.exe`、`testcpp1_validation.exe` 复核：向上法术现为 5 格纵向列 + 3 格 crown，向下法术现为整段下砸列 + 3 格落地爆点，判定范围已较旧版放大；随后按用户提示复查到 `Player.cpp` 已于更晚版本把上劈 / 下劈命中后的 `Soul +11` 补齐；当前仍只剩 `GroundEnemy::DashAttack / AttackRecovery` 路径未统一贴回 `spawnPosition.y` | 下一位接手 `Enemy.*` 剩余贴地修复，再由文档位复核收口 | 本轮严格未越界改代码；结论已同步回 `parameter_tuning.md` 与 staff |
 | 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd` | Player dash 简易动画 | 已完成 | 在 `Player` 主线渲染里给 `SHIFT` dash 补了简易拖尾和前缘方向提示：冲刺前半程更亮、后半程衰减，不改 dash 判定和位移逻辑，只增强可读性 | 下一位接手继续做 dash 手感 polish 或整线跑图验证的 Copilot | 本轮只改 `Player.*` 的显示层，不触碰主流程和战斗结算 |
+| 2026-04-22 | Copilot CLI（GPT-5.4） `copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd` | Linux/macOS 主线适配 / README 重写 | 进行中 | 正在把主线运行时输入层与提示同步到 Linux/macOS：保留 Windows `SHIFT` dash，同时将非 Windows dash 改为 `Q`；README 需改成清晰写明 Linux / macOS 的下载、编译与运行步骤，并按要求移除一键安装包说明 | 下方 3 个并行任务由其他 AI 认领；我继续负责主线代码与 README | 当前主改动面集中在 `KeyStateManager.*`、主线提示文本和 `README.md` |
+
+---
+
+## Linux / macOS 适配并行任务下发
+
+这轮我的主任务是：**把主线 `hongkongknight` 适配到 Linux / macOS，并把 README 改成三端清晰下载 / 运行说明**。
+
+为了不抢文件，另外三项任务拆给 3 个 AI：
+
+1. **并行任务 A：沙盒提示与键位同步**
+   - 文件范围：`src\sandbox\PlayerSandbox.cpp`、`src\sandbox\EnemySandbox.cpp`、`src\sandbox\BossSandbox.cpp`、`src\sandbox\WorldSandbox.cpp`
+   - 目标：把所有沙盒里的操作提示、底部 HUD、帮助文本同步成跨平台版本；Windows 继续写 `SHIFT` dash，Linux/macOS 写 `Q` dash
+   - 不要碰：`src\core\main.cpp`、`src\input\KeyStateManager.cpp`、`README.md`
+
+2. **并行任务 B：跨平台文档补量**
+   - 文件范围：`docs\game_design.md`、`docs\parameter_tuning.md`、`docs\copilot_staff.md`
+   - 目标：把跨平台控制说明、主程序名 `hongkongknight`、Linux/macOS 运行假设同步进设计文档与参数文档
+   - 不要碰：主线代码、README、沙盒代码
+
+3. **并行任务 C：Unix 烟测与问题登记**
+   - 文件范围：只允许更新 `docs\copilot_staff.md`
+   - 目标：在 Linux / macOS 环境实际烟测 `make`、`make run`、标题页输入、主线移动 / 跳跃 / `Q` dash / 交互是否可用；如果有问题，只做登记，不直接改代码
+   - 不要碰：任何 `src\`、`include\`、`README.md`
 
 ---
 

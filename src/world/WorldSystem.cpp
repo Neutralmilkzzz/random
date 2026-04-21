@@ -9,8 +9,8 @@
 
 namespace {
 
-const char* kMapRepositoryRoot = "data\\maps\\";
-const char* kMapIndexFile = "data\\maps\\index.txt";
+const char* kMapRepositoryRoot = "data/maps/";
+const char* kMapIndexFile = "data/maps/index.txt";
 
 std::string trim(const std::string& input) {
     const std::string whitespace = " \t\r\n";

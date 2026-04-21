@@ -5,7 +5,7 @@ LDFLAGS =
 
 # 目标可执行文件（根据平台自动设置后缀）
 ifeq ($(OS),Windows_NT)
-    TARGET = testcpp1.exe
+    TARGET = hongkongknight.exe
     PLAYER_SANDBOX_TARGET = player_sandbox.exe
     SKILL_SANDBOX_TARGET = skill_sandbox.exe
     COMBAT_SANDBOX_TARGET = combat_sandbox.exe
@@ -14,7 +14,7 @@ ifeq ($(OS),Windows_NT)
     WORLD_SANDBOX_TARGET = world_sandbox.exe
     MAP_EDITOR_SANDBOX_TARGET = map_editor_sandbox.exe
 else
-    TARGET = testcpp1
+    TARGET = hongkongknight
     PLAYER_SANDBOX_TARGET = player_sandbox
     SKILL_SANDBOX_TARGET = skill_sandbox
     COMBAT_SANDBOX_TARGET = combat_sandbox

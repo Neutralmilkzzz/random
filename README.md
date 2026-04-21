@@ -1,78 +1,157 @@
 # Fallen Soul ASCII Demo
 
-Windows 控制台 ASCII 动作游戏 Demo。当前仓库已经包含主线运行所需的地图与资源文件，适合直接发给队友试玩。
+Windows / Linux / macOS 终端 ASCII 动作游戏 Demo。主线运行依赖仓库内的地图与存档目录，因此请始终保留根目录下的 `data` 文件夹。
 
-## 直接游玩
+## 下载方式
 
-### Windows：最简单的试玩方式
+三端通用：
 
-1. 下载整个仓库文件夹，或直接下载 GitHub 的 ZIP 并完整解压。
-2. **不要只单独拿走 `testcpp1.exe`**，必须保留它旁边的 `data` 文件夹。
-3. 在仓库根目录双击 `testcpp1.exe`。
+1. 进入 GitHub 仓库页面。
+2. 任选一种方式下载：
+   - `git clone https://github.com/Neutralmilkzzz/random.git`
+   - 或点击 **Code -> Download ZIP**
+3. 下载后进入仓库根目录。
 
-只要目录结构完整，Windows 队友**不需要自己编译**，直接就能玩。
+## Windows 运行
 
-当前运行时依赖的是这些相对路径资源：
+如果仓库里已经带着编好的 `hongkongknight.exe`，Windows 队友可以直接：
 
-- `testcpp1.exe`
-- `data\maps\index.txt`
-- `data\maps\*.map`
+1. 下载整个项目文件夹
+2. 保持 `hongkongknight.exe` 和 `data` 文件夹在同一级目录
+3. 双击 `hongkongknight.exe`
 
-首次游玩时如果没有存档，游戏会自动按 `NEW GAME` 从空档开始；存档文件会写到：
-
-- `data\save_slot_01.sav`
-
-### 单文件一键试玩包
-
-如果你想发一个单独的 Windows 可执行文件，可以在仓库根目录运行：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\package_release.ps1
-```
-
-生成文件：
-
-```text
-dist\random_oneclick_play.exe
-```
-
-这个文件双击后会自动解包并启动游戏，更适合临时发给不会看目录结构的人试玩。
-
-## 从源码编译
-
-### Windows
-
-需要先安装 `g++` 并加入 `PATH`。
-
-最简单的方式：
+如果本地没有现成 exe，就先安装 `g++`，然后运行：
 
 ```bat
 run.bat
 ```
 
-它会先编译，再直接运行。
-
-如果你只想手动编译主程序：
+或者手动编译：
 
 ```bat
-g++ -std=c++11 -Wall -Wextra -O2 -Iinclude src\core\main.cpp src\core\GameSession.cpp src\combat\CombatSystem.cpp src\enemy\Enemy.cpp src\npc\NpcSystem.cpp src\save\SaveSystem.cpp src\world\WorldSystem.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp -o testcpp1.exe
+g++ -std=c++11 -Wall -Wextra -O2 -Iinclude src\core\main.cpp src\core\GameSession.cpp src\combat\CombatSystem.cpp src\enemy\Enemy.cpp src\npc\NpcSystem.cpp src\save\SaveSystem.cpp src\world\WorldSystem.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp -o hongkongknight.exe
 ```
 
-### Makefile
+## Linux 运行
 
-仓库也提供了 `Makefile`：
+### 1. 安装编译工具
+
+常见发行版可以先安装 `git`、`g++` 和 `make`：
+
+```bash
+# Ubuntu / Debian
+sudo apt update
+sudo apt install git g++ make
+
+# Fedora
+sudo dnf install git gcc-c++ make
+
+# Arch
+sudo pacman -S git gcc make
+```
+
+### 2. 下载仓库
+
+```bash
+git clone https://github.com/Neutralmilkzzz/random.git
+cd random
+```
+
+如果你是下载 ZIP，就先解压再 `cd` 进去。**后面所有命令都必须在这个仓库根目录里执行**，不要切到 `src/` 里面运行。
+
+### 3. Linux 服务器一步一步启动
+
+如果你现在就在自己的 Linux 服务器上，最稳的一套命令就是：
+
+```bash
+cd /你的/项目路径/random
+git pull
+ls data/maps/index.txt
+make
+./hongkongknight
+```
+
+说明：
+
+1. `cd /你的/项目路径/random`：进入仓库根目录
+2. `git pull`：拉最新代码；如果你是刚下载的 ZIP，可以跳过
+3. `ls data/maps/index.txt`：确认地图资源还在
+4. `make`：编译 Linux 版可执行文件 `hongkongknight`
+5. `./hongkongknight`：启动游戏
+
+如果你看到类似：
+
+```text
+Failed to open map file: data/maps/spawn_village.map
+```
+
+通常说明两件事之一：
+
+1. 你**不在仓库根目录**
+2. 你的 `data/maps` 文件夹被删了或者没下载完整
+
+### 4. 编译并运行
+
+最简单：
 
 ```bash
 make
+./hongkongknight
 ```
 
-会构建主程序；如果环境支持，也可以用：
+或者一步到位：
 
 ```bash
-make sandboxes
+make run
 ```
 
-来构建各个沙盒程序。
+如果你不用 `make`，也可以手动编译：
+
+```bash
+g++ -std=c++11 -Wall -Wextra -O2 -Iinclude src/core/main.cpp src/core/GameSession.cpp src/combat/CombatSystem.cpp src/enemy/Enemy.cpp src/npc/NpcSystem.cpp src/save/SaveSystem.cpp src/world/WorldSystem.cpp src/player/Player.cpp src/world/MapDrawer.cpp src/input/KeyStateManager.cpp -o hongkongknight
+./hongkongknight
+```
+
+## macOS 运行
+
+### 1. 安装命令行编译工具
+
+先安装 Apple Command Line Tools：
+
+```bash
+xcode-select --install
+```
+
+安装完成后确认有 `clang++` 或 `g++`、`make` 可用。
+
+### 2. 下载仓库
+
+```bash
+git clone https://github.com/Neutralmilkzzz/random.git
+cd random
+```
+
+如果你是下载 ZIP，就先解压再进入目录。
+
+### 3. 编译并运行
+
+```bash
+make
+./hongkongknight
+```
+
+或者：
+
+```bash
+make run
+```
+
+如果你想手动编译：
+
+```bash
+c++ -std=c++11 -Wall -Wextra -O2 -Iinclude src/core/main.cpp src/core/GameSession.cpp src/combat/CombatSystem.cpp src/enemy/Enemy.cpp src/npc/NpcSystem.cpp src/save/SaveSystem.cpp src/world/WorldSystem.cpp src/player/Player.cpp src/world/MapDrawer.cpp src/input/KeyStateManager.cpp -o hongkongknight
+./hongkongknight
+```
 
 ## 操作说明
 
@@ -84,6 +163,8 @@ make sandboxes
 
 ### 游戏内
 
+#### Windows
+
 - `A/D`：左右移动
 - `Space`：跳跃
 - `Shift`：横向 dash
@@ -92,19 +173,29 @@ make sandboxes
 - `W + J / K`：向上攻击 / 向上法术
 - `S + J / K`：向下攻击 / 下砸法术
 - `E`：与门、NPC、商店交互
-- 商店内 `W/S` 选择，`J` 购买，`E` 关闭
 
-## 给队友试玩时最重要的一句
+#### Linux / macOS
 
-**是的。**如果你的队友用的是 **Windows**，那么他们只需要：
+- `A/D`：左右移动
+- `Space`：跳跃
+- `Q`：横向 dash
+- `J`：物理攻击
+- `K`：法术攻击
+- `W + J / K`：向上攻击 / 向上法术
+- `S + J / K`：向下攻击 / 下砸法术
+- `E`：与门、NPC、商店交互
 
-1. 下载整个项目文件夹
-2. 保持 `testcpp1.exe` 和 `data` 文件夹还在原位
-3. 双击 `testcpp1.exe`
+商店内三端统一：`W/S` 选择，`J` 购买，`E` 关闭。
 
-就可以直接游玩。
+## 运行时依赖
 
-## 平台说明
+主线运行依赖这些相对路径资源：
 
-- **Windows**：当前是最直接、最推荐的游玩平台。
-- **macOS**：不能直接运行仓库里的 `testcpp1.exe`；需要自己编译对应平台版本，或者借助 Wine / CrossOver。
+- Windows：`hongkongknight.exe`
+- Linux / macOS：`hongkongknight`
+- `data/maps/index.txt`
+- `data/maps/*.map`
+
+首次游玩如果没有存档，会从 `NEW GAME` 空档开始；存档写入：
+
+- `data/save_slot_01.sav`

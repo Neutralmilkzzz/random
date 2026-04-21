@@ -3,6 +3,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 Set-Location $PSScriptRoot
 
+$runtimeExe = 'hongkongknight.exe'
 $outputDir = Join-Path $PSScriptRoot 'dist'
 $outputExe = Join-Path $outputDir 'random_oneclick_play.exe'
 $buildRoot = Join-Path $env:TEMP 'random_oneclick_build'
@@ -30,14 +31,14 @@ Write-Host '[1/4] Building runtime...'
     src\player\Player.cpp `
     src\world\MapDrawer.cpp `
     src\input\KeyStateManager.cpp `
-    -o testcpp1.exe
+    -o $runtimeExe
 
 if ($LASTEXITCODE -ne 0) {
     throw 'Runtime build failed.'
 }
 
 Write-Host '[2/4] Preparing payload...'
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'testcpp1.exe') -Destination (Join-Path $payloadRoot 'testcpp1.exe')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot $runtimeExe) -Destination (Join-Path $payloadRoot $runtimeExe)
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'data') -Destination (Join-Path $payloadRoot 'data') -Recurse
 
 $saveFile = Join-Path $payloadRoot 'data\save_slot_01.sav'
@@ -66,7 +67,7 @@ if errorlevel 1 (
 
 cls
 pushd "%GAME_ROOT%"
-start "" /wait testcpp1.exe
+start "" /wait hongkongknight.exe
 set "GAME_EXIT=%ERRORLEVEL%"
 popd
 

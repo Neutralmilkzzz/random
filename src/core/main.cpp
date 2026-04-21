@@ -24,7 +24,10 @@ const int kTitleScreenHeight = 24;
 const int kTitleUnavailableHintFrames = 90;
 const int kTitleStartTransitionFrames = 24;
 const int kFlyingProjectileStepFrames = 3;
-const char* kDefaultRuntimePrompt = "Move with A/D, jump with SPACE, dash with SHIFT. Press E near doors or NPCs.";
+const std::string kDefaultRuntimePrompt =
+        std::string("Move with A/D, jump with SPACE, dash with ") +
+        runtimeDashKeyLabel() +
+        ". Press E near doors or NPCs.";
 const char* kShortcutSpawnModule03 = "shortcut_spawn_module_03";
 const char* kShortcutSpawnModule05 = "shortcut_spawn_module_05";
 const char* kSkillDoubleJump = "double_jump";
@@ -1022,7 +1025,7 @@ void updatePrompt(const game::MapDefinition& mapDefinition,
 std::string buildBottomFooter(const RuntimeState& state, const game::SaveData& saveData) {
     std::ostringstream footer;
     footer << "\n";
-    footer << "A/D Move  SPACE Jump  SHIFT Dash  W/S Aim";
+    footer << "A/D Move  SPACE Jump  " << runtimeDashKeyLabel() << " Dash  W/S Aim";
     if (hasUnlockedSkill(saveData, game::SkillId::DoubleJump)) {
         footer << "  SPACE Double Jump";
     }

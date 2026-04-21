@@ -205,7 +205,7 @@ struct SandboxState {
           framesSinceLastDamage(kHealLockoutFrames),
           blinkFramesRemaining(0),
           lastAction("Ready"),
-          lastResult("SPACE jump, SPACE again double jump, SHIFT dash.") {
+          lastResult(std::string("SPACE jump, SPACE again double jump, ") + runtimeDashKeyLabel() + " dash.") {
         stats.soul.maximum = kSoulMeterMax;
         stats.soul.current = stats.soul.maximum;
     }
@@ -1393,7 +1393,7 @@ std::string buildHud(const SandboxState& state, int activeGroundEnemies) {
     hud << "HP Debug " << state.stats.health.current << "/" << state.stats.health.maximum
         << " | Soul Debug " << state.stats.soul.current << "/" << state.stats.soul.maximum << "\n";
     hud << "[HeroSandbox] ESC exit | P infinite soul (" << (state.infiniteSoulMode ? "ON" : "OFF") << ")\n";
-    hud << "Move A/D  Look W/S  Jump SPACE  Dash SHIFT\n";
+    hud << "Move A/D  Look W/S  Jump SPACE  Dash " << runtimeDashKeyLabel() << "\n";
     hud << "J attack  K spell  W+J up  S+J down\n";
     hud << "W+K up wave  S+K slam  R heal\n";
     hud << "1 spawn  2 pair  C clear  H self-hit  X death\n";

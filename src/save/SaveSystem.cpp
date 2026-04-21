@@ -8,7 +8,7 @@
 
 namespace {
 
-const char* kSaveFilePath = "data\\save_slot_01.sav";
+const char* kSaveFilePath = "data/save_slot_01.sav";
 
 std::string trim(const std::string& input) {
     const std::string whitespace = " \t\r\n";
