@@ -252,3 +252,19 @@
 - 本轮文档位只做回归验证和记录，不越界改 `Player.*`、`Enemy.*`、`CombatSystem.*`。
 - 复核时已重新编译 `player_sandbox.exe`、`enemy_sandbox.exe` 和 `testcpp1_validation.exe`，确保上述结论对应当前可编译仓库状态。
 - 因此，本轮 3 个战斗手感问题的当前结果是：**2 项已通过（上下法术范围放大、上下劈砍 Soul），1 项仍待代码线补完（地面敌人贴地）**。
+
+## 21. 2026-04-21 终端友好输入重构回归记录
+
+| 项目 | 当前仓库状态 | 当前实现 / 证据 | 结论 |
+| --- | --- | --- | --- |
+| `PlayerSandbox` 新单键提示 | 已通过 | 沙盒 HUD 与帮助文本现已切到 `J / K / U / N / I / M`：横斩 `J`、横向法术 `K`、上劈 `U`、下劈 `N`、上法术 `I`、下砸 `M` | 沙盒说明与实际沙盒输入保持一致 |
+| 上劈 / 下劈 / 上法术 / 下法术改单键 | 未通过（主线） | `KeyStateManager` 已能读取 `U / N / I / M`，但 `Player.cpp` 当前战斗分支仍主要依赖 `W/S + J/K` 组合逻辑 | 主线 `Player.*` 仍待任务 A 收口 |
+| `SPACE` 固定高度跳跃 | 未通过 | `Player.cpp` 仍保留 `jumpHoldRemaining`、`minimumJumpRiseRemaining` 与“松开跳跃后截断上升”的分支 | 仍是可变跳高，不是固定跳高 |
+| 跑速提升 | 部分通过 | 当前 `Player.cpp` 中 `kRunSpeed` / `kAirMoveSpeed` 为 `10.79f`；若以旧基线 `8.3` 计算，当前约为 `1.30x` 而非文档目标 `1.25x` | 已提速，但当前落点更接近 `+30%` |
+| 取消起步加速度 | 已通过 | 当前水平位移直接用 `moveSpeed * delta` 累加到 `horizontalMoveAccumulator`，按下左右后立即进入目标速度，不再经过额外起步加速段 | 当前仓库已落地 |
+| 普攻攻击距离 `+1` | 未通过 | `Player.cpp` 当前 `kAttackRange` 仍为 `2`，尚未从旧值再上调 1 格 | 仍待任务 A 落地 |
+
+### 21.1 回归说明
+
+- 本轮文档位按分工只改 `PlayerSandbox.cpp` 与文档，不越界触碰 `Player.*`、`KeyStateManager.*`、`main.cpp`、`README.md`。
+- 因此，本节结论分为两部分：**沙盒提示已同步**，但主线 `Player.*` 对应的固定跳高 / 跑速目标值 / 普攻距离目标值 / 单键战斗映射还没有全部收口。

@@ -87,7 +87,7 @@ void KeyStateManager::readKeys() {
 #ifdef _WIN32
     const char watchedLetters[] = {
             'A', 'C', 'D', 'E', 'W', 'S',
-            'J', 'I', 'K', 'L', 'Q',
+            'J', 'U', 'N', 'I', 'K', 'L', 'Q',
             'O', 'M', 'R', 'H',
             'P', 'X'
     };

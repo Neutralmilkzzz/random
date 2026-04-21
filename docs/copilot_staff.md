@@ -18,9 +18,9 @@
 | Copilot 名称 | Resume | 负责模块 | 当前状态 | 最新进展 | 阻塞 | 接手人 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Copilot CLI（GPT-5.4） | `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 项目结构、构建入口、沙盒、地面敌人、飞行敌人原型、Boss 原型 / `CombatSystem`、参数文档、`module_02 / module_04` 地图细化、Soul HUD 修复 | 已完成（本轮交付） | 已完成 Boss demo 下沉到 `Enemy.*`、`CombatSystem` 最小结算接口与相关文档：`boss-demo-into-enemy`、`combat-resolver-implement`、`combat-resolver-docs` 均已 done；主流程位现可直接读取 Boss 状态、攻击信号与一次性击杀奖励 | 仅剩 `combat-resolver-design` 处于 blocked，且该项原本就依赖别的 AI 先完成 `PlayerSandbox` 相关改动，不属于本轮未收尾项 | 下一位接手主流程接线、Boss 正式接入或继续补完整 Battle loop 的 Copilot |
-| Copilot CLI（GPT-5.4） | copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd | 技能/攻击 ASCII 表现设计、法术分镜、显示语义约定、Player dash 动画、Linux/macOS 主线适配、README 下载/运行说明 | 进行中 | 已补充左右冲击波、下砸、普通攻击缺口、敌人受伤/死亡、HKD/HUD 与 `YOU DEAD` 白屏死亡演出的 ASCII 方案；已补主线 `SHIFT` dash 简易拖尾；当前正把主线输入 / 提示 / 文档同步到 Linux/macOS，并按用户要求将非 Windows dash 改为 `Q` | 无 | 下一位接手技能正式渲染接入、玩家攻击判定、跨平台沙盒提示同步或进一步战斗手感优化的 Copilot |
+| Copilot CLI（GPT-5.4） | copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd | 技能/攻击 ASCII 表现设计、法术分镜、显示语义约定、Player dash 动画、Linux/macOS 主线适配、README 下载/运行说明、终端友好输入重构分工 | 进行中 | 已补充左右冲击波、下砸、普通攻击缺口、敌人受伤/死亡、HKD/HUD 与 `YOU DEAD` 白屏死亡演出的 ASCII 方案；已补主线 `SHIFT` dash 简易拖尾；已完成 Linux/macOS 路径与文档适配；当前按用户最新要求，正在把“多键组合改单键、固定跳高、移动提速、暂停确认界面、键位提示同步”拆成 3 条不抢文件的并行任务 | 无 | 下方 3 条终端友好输入重构任务由其他 AI 认领；本位继续做主线收口与交接 |
 | Copilot CLI（GPT-5.4） | `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 玩家沙盒、敌人沙盒、MapDrawer 渲染、参数同步、主线 Player 接入、`module_01 / module_03` 地图细化、主菜单 / 存档最小闭环、捷径门持久化解锁、二段跳 / 普通 dash、Boss 房主流程接线 / 入场对话 / 胜利结算 | 已完成 | 已完成玩家攻击/法术/HUD/`YOU DEAD` 死亡演出接入主线 `Player.cpp`，改成 `W/S` + `J/K` 组合键映射，并细化 `module_01`、`module_03`；已补完 `NEW GAME` / `CONTINUE` / 最小存档闭环与捷径门持久化解锁；现已把普通横向 dash 定为默认 `SHIFT`，并将二段跳改成商人售卖、购买后随存档持久化的能力；本轮已把 `boss_room_01` 接成“进房对白 -> 开战 -> Boss 死亡 -> VICTORY 结算”的主流程闭环，并保持死亡恢复链路可复用 | 无 | 下一个负责玩家状态机、击退、主线战斗、固定存档点、Boss 收尾 polish 或整线跑图验证的人 |
-| Copilot CLI（GPT-5.4） | ` copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 参数整理、调参文档、员工文档、进度盘点、地图仓库、`NpcSystem` 最小交互、主界面 HUD 精简、`boss_room_01` 决战房收口、战斗手感回归验证 | 进行中 | 已完成基础参数归档、员工登记表建立与 resume 对应、8 张白盒地图 + `testcpp1` 主线接线、地图分工表；已细化 `spawn_village` / `random_event_01`，修复 `module_02` 入口卡墙与 `module_01` 边界破损；已落地 `NpcSystem` 最小交互模块，并把主界面改成顶部极简 HUD + 底部常驻操作说明，现已把 `NpcSystem` 正式接进 `main.cpp` 运行时，支持 `E` 交互 / `W/S` 选项 / `J` 购买，并补齐 `Makefile` / `run.bat` 构建项；本轮按最新地图重构任务重做了 `module_05`，并已把 `boss_room_01` 收成右侧入场缓冲 + 中左部开阔主战场的决战房骨架，保留门位、不放杂兵，为 Boss 对话和胜利结算预留空间；夜间回归复核后确认：上下法术判定范围已扩大并能编译通过，但“地面敌人冲刺后贴地”和“上/下劈砍命中加 Soul”两项在当前仓库代码中仍未真正落地 | 待对应代码负责人补完剩余 2 项后，再做一次整线复核并关闭战斗手感插单 | 下一位接手 `Enemy.*` / `Player.*` 剩余两项修复，或在代码修复后继续补最终验证记录的 Copilot |
+| Copilot CLI（GPT-5.4） | ` copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 参数整理、调参文档、员工文档、进度盘点、地图仓库、`NpcSystem` 最小交互、主界面 HUD 精简、`boss_room_01` 决战房收口、战斗手感回归验证、终端友好输入任务 C | 进行中 | 已完成基础参数归档、员工登记表建立与 resume 对应、8 张白盒地图 + `testcpp1` 主线接线、地图分工表；已细化 `spawn_village` / `random_event_01`，修复 `module_02` 入口卡墙与 `module_01` 边界破损；已落地 `NpcSystem` 最小交互模块，并把主界面改成顶部极简 HUD + 底部常驻操作说明，现已把 `NpcSystem` 正式接进 `main.cpp` 运行时，支持 `E` 交互 / `W/S` 选项 / `J` 购买，并补齐 `Makefile` / `run.bat` 构建项；本轮按最新地图重构任务重做了 `module_05`，并已把 `boss_room_01` 收成右侧入场缓冲 + 中左部开阔主战场的决战房骨架，保留门位、不放杂兵，为 Boss 对话和胜利结算预留空间；此前夜间回归已确认上下法术范围放大和上/下劈砍 `Soul +11` 已落地、只剩地面敌人贴地未收口；本轮已认领并完成“终端友好输入重构”任务 C：`PlayerSandbox` 帮助文本切到 `J/K + U/N/I/M`，并把固定跳高 / 跑速 / 普攻距离 / 起步加速度的当前回归结论写回调参文档 | 仍待任务 A / B 把主线 `Player.*`、`main.cpp`、`README.md` 完整收口后，再做一次整线复核并关闭终端友好输入插单 | 下一位接手 `Enemy.*` 剩余贴地修复，或在 A / B 合并后继续补最终整线验证记录的 Copilot |
 
 ---
 
@@ -61,6 +61,8 @@
 | 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 战斗手感插单回归验证 / 文档回填 | 已完成 | 只读当前仓库代码并重新编译 `player_sandbox.exe`、`enemy_sandbox.exe`、`testcpp1_validation.exe` 复核：向上法术现为 5 格纵向列 + 3 格 crown，向下法术现为整段下砸列 + 3 格落地爆点，判定范围已较旧版放大；随后按用户提示复查到 `Player.cpp` 已于更晚版本把上劈 / 下劈命中后的 `Soul +11` 补齐；当前仍只剩 `GroundEnemy::DashAttack / AttackRecovery` 路径未统一贴回 `spawnPosition.y` | 下一位接手 `Enemy.*` 剩余贴地修复，再由文档位复核收口 | 本轮严格未越界改代码；结论已同步回 `parameter_tuning.md` 与 staff |
 | 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd` | Player dash 简易动画 | 已完成 | 在 `Player` 主线渲染里给 `SHIFT` dash 补了简易拖尾和前缘方向提示：冲刺前半程更亮、后半程衰减，不改 dash 判定和位移逻辑，只增强可读性 | 下一位接手继续做 dash 手感 polish 或整线跑图验证的 Copilot | 本轮只改 `Player.*` 的显示层，不触碰主流程和战斗结算 |
 | 2026-04-22 | Copilot CLI（GPT-5.4） `copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd` | Linux/macOS 主线适配 / README 重写 | 进行中 | 正在把主线运行时输入层与提示同步到 Linux/macOS：保留 Windows `SHIFT` dash，同时将非 Windows dash 改为 `Q`；README 需改成清晰写明 Linux / macOS 的下载、编译与运行步骤，并按要求移除一键安装包说明 | 下方 3 个并行任务由其他 AI 认领；我继续负责主线代码与 README | 当前主改动面集中在 `KeyStateManager.*`、主线提示文本和 `README.md` |
+| 2026-04-22 | Copilot CLI（GPT-5.4） `copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd` | 终端友好输入重构分工 | 已完成 | 按用户新要求把终端友好控制重构拆成 3 条并行线：1）`Player.*` / `KeyStateManager.*` 负责单键改绑、固定跳高、跑速 +25%、取消启动加速度、普攻距离 +1；2）`main.cpp` / `README.md` 负责暂停确认界面、`ESC` 退出改键、底部提示与运行说明；3）`PlayerSandbox.cpp` / `docs` 负责沙盒帮助文本、参数文档和最终回归记录 | 3 位负责人分别认领 | 本轮先做文件级分工，避免多名 AI 同时改 `Player.*` / `main.cpp` / 文档造成冲突 |
+| 2026-04-22 | Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 终端友好输入重构任务 C：沙盒提示 / 文档 / 回归记录 | 已完成（本轮职责） | 已把 `PlayerSandbox` 的帮助文本与方向技输入改成 `J/K + U/N/I/M`；同时把固定跳高、跑速、普攻距离、取消起步加速度的当前仓库状态写回 `docs\\parameter_tuning.md`，明确区分“沙盒提示已同步”和“主线 `Player.*` 仍待任务 A 收口” | 下一位接手任务 A / B 合并后的主线整体验收，或继续补最终整线验证记录的 Copilot | 本轮未越界修改 `Player.*`、`KeyStateManager.*`、`main.cpp` 或 `README.md`；地面敌人贴地问题仍是独立待修项 |
 
 ---
 
@@ -84,6 +86,56 @@
    - 文件范围：只允许更新 `docs\copilot_staff.md`
    - 目标：在 Linux / macOS 环境实际烟测 `make`、`make run`、标题页输入、主线移动 / 跳跃 / `Q` dash / 交互是否可用；如果有问题，只做登记，不直接改代码
    - 不要碰：任何 `src\`、`include\`、`README.md`
+
+---
+
+## 终端友好输入重构并行任务下发
+
+用户最新要求已经明确：**把吃同时按键的操作收口成终端友好版本**，优先减少 Linux terminal / SSH 场景下的多键输入依赖。
+
+本轮目标清单：
+
+1. 把需要同时按两个键的主线操作改成单键：
+   - 上劈 -> `U`
+   - 下劈 -> `N`
+   - 上法术 -> `I`
+   - 下法术 -> `M`
+2. `SPACE` 改成固定高度起跳，起跳后不再受后续长按 / 松开影响
+3. 普攻攻击距离 `+1`
+4. 跑速提升 `25%`
+5. 取消起步加速度，按下左右立即用目标速度移动
+6. 城镇里原本和其他 `L` 混淆的老人字母改成 `O`
+7. 所有键位帮助文本 / HUD / README 统一改成新映射
+8. 不再直接用 `ESC` 立刻退出；改成暂停确认小界面，再确认退出
+
+为了不抢文件，这轮拆给 3 个 AI：
+
+1. **并行任务 A：玩家控制 / 输入手感重构**
+   - 文件范围：`include\input\KeyStateManager.h`、`src\input\KeyStateManager.cpp`、`include\player\Player.h`、`src\player\Player.cpp`
+   - 负责内容：
+     - 上劈 / 下劈 / 上法术 / 下法术改单键 `U / N / I / M`
+     - `SPACE` 固定高度跳跃
+     - 跑速 +25%
+     - 取消左右移动起步加速度
+     - 普攻攻击距离 +1
+   - 不要碰：`src\core\main.cpp`、`README.md`、`docs\*`
+
+2. **并行任务 B：主线 UI / 提示 / 暂停确认界面**
+   - 文件范围：`src\core\main.cpp`、`README.md`
+   - 负责内容：
+     - 底部操作提示、标题页提示、主线帮助文案统一改成新键位
+     - `ESC` 不再直接退出，改成暂停 / 是否退出确认小界面
+     - 主线中城镇老人显示字母从 `L` 改成 `O`
+     - README 的 Quick Start / Controls 同步改成新键位
+   - 不要碰：`Player.*`、`KeyStateManager.*`、`docs\parameter_tuning.md`
+
+3. **并行任务 C：沙盒提示 / 文档 / 回归记录**
+   - 文件范围：`src\sandbox\PlayerSandbox.cpp`、`docs\parameter_tuning.md`、`docs\copilot_staff.md`
+   - 负责内容：
+     - `PlayerSandbox` 的帮助文本、HUD 提示改成新键位
+     - 参数文档同步记录：固定跳高、跑速 +25%、普攻距离 +1、取消起步加速度
+     - 实施后在 staff 里登记“终端友好输入重构”的回归结果
+   - 不要碰：`src\core\main.cpp`、`Player.*`、`KeyStateManager.*`
 
 ---
 

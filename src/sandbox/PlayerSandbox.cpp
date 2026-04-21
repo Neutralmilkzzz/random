@@ -205,7 +205,8 @@ struct SandboxState {
           framesSinceLastDamage(kHealLockoutFrames),
           blinkFramesRemaining(0),
           lastAction("Ready"),
-          lastResult(std::string("SPACE jump, SPACE again double jump, ") + runtimeDashKeyLabel() + " dash.") {
+          lastResult(std::string("SPACE jump, J/K basics, U/N/I/M directional, ") + runtimeDashKeyLabel() +
+                     " dash.") {
         stats.soul.maximum = kSoulMeterMax;
         stats.soul.current = stats.soul.maximum;
     }
@@ -1393,9 +1394,9 @@ std::string buildHud(const SandboxState& state, int activeGroundEnemies) {
     hud << "HP Debug " << state.stats.health.current << "/" << state.stats.health.maximum
         << " | Soul Debug " << state.stats.soul.current << "/" << state.stats.soul.maximum << "\n";
     hud << "[HeroSandbox] ESC exit | P infinite soul (" << (state.infiniteSoulMode ? "ON" : "OFF") << ")\n";
-    hud << "Move A/D  Look W/S  Jump SPACE  Dash " << runtimeDashKeyLabel() << "\n";
-    hud << "J attack  K spell  W+J up  S+J down\n";
-    hud << "W+K up wave  S+K slam  R heal\n";
+    hud << "Move A/D  Jump SPACE  Dash " << runtimeDashKeyLabel() << "\n";
+    hud << "J attack  U up slash  N down slash\n";
+    hud << "K spell  I up wave  M slam  R heal\n";
     hud << "1 spawn  2 pair  C clear  H self-hit  X death\n";
     hud << "Facing " << (state.facing == game::FacingDirection::Right ? "Right" : "Left")
         << " | Heal Ready " << (state.framesSinceLastDamage >= kHealLockoutFrames ? "YES" : "NO") << "\n";
@@ -1603,10 +1604,18 @@ int main() {
             const game::Position playerPosition = findGlyphPosition(gameplayMap, '@');
             const game::Position dummyPosition = findGlyphPosition(gameplayMap, 'T');
             const bool dummyInMeleeRange = isDummyInMeleeRange(playerPosition, dummyPosition, state.facing);
-            const bool aimingUp = isKeyDown(keyStateManager, 'w') || isKeyDown(keyStateManager, 'W');
-            const bool aimingDown = isKeyDown(keyStateManager, 's') || isKeyDown(keyStateManager, 'S');
-            const bool physicalPressed = isJustPressed(keyStateManager, state, 'j') || isJustPressed(keyStateManager, state, 'J');
-            const bool spellPressed = isJustPressed(keyStateManager, state, 'k') || isJustPressed(keyStateManager, state, 'K');
+            const bool basicAttackPressed = isJustPressed(keyStateManager, state, 'j') ||
+                                            isJustPressed(keyStateManager, state, 'J');
+            const bool upSlashPressed = isJustPressed(keyStateManager, state, 'u') ||
+                                        isJustPressed(keyStateManager, state, 'U');
+            const bool downSlashPressed = isJustPressed(keyStateManager, state, 'n') ||
+                                          isJustPressed(keyStateManager, state, 'N');
+            const bool horizontalSpellPressed = isJustPressed(keyStateManager, state, 'k') ||
+                                                isJustPressed(keyStateManager, state, 'K');
+            const bool upSpellPressed = isJustPressed(keyStateManager, state, 'i') ||
+                                        isJustPressed(keyStateManager, state, 'I');
+            const bool downSpellPressed = isJustPressed(keyStateManager, state, 'm') ||
+                                          isJustPressed(keyStateManager, state, 'M');
 
             if (!playerLockedByCast && isJustPressed(keyStateManager, state, '1')) {
                 const game::Position spawnPoint = kGroundEnemySpawnPoints[state.groundEnemySpawns % kGroundEnemySpawnPoints.size()];
@@ -1650,73 +1659,69 @@ int main() {
                 applySelfDamage(state);
             }
 
-            if (!playerLockedByCast && physicalPressed) {
-                if (aimingUp) {
-                    startMeleeVisual(state, MeleeVisualType::Up, playerPosition, state.facing);
-                    const int defeatedBefore = state.defeatedGroundEnemies;
-                    const int enemyHits = applyDamageToGroundEnemies(
-                            groundEnemies,
-                            playerPosition,
-                            state.facing,
-                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true));
-                    removeDefeatedGroundEnemies(groundEnemies, state);
+            if (!playerLockedByCast && upSlashPressed) {
+                startMeleeVisual(state, MeleeVisualType::Up, playerPosition, state.facing);
+                const int defeatedBefore = state.defeatedGroundEnemies;
+                const int enemyHits = applyDamageToGroundEnemies(
+                        groundEnemies,
+                        playerPosition,
+                        state.facing,
+                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true));
+                removeDefeatedGroundEnemies(groundEnemies, state);
 
-                    if (enemyHits > 0) {
-                        registerGroundEnemyHit(state, "Up Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
-                    } else if (dummyInMeleeRange) {
-                        registerDummyHit(state, "Up Slash", false, 0);
-                    } else {
-                        state.lastAction = "Up Slash";
-                        state.lastResult = "Slash triggered. No target in range.";
-                    }
-                } else if (aimingDown) {
-                    startMeleeVisual(state, MeleeVisualType::Down, playerPosition, state.facing);
-                    const int defeatedBefore = state.defeatedGroundEnemies;
-                    const int enemyHits = applyDamageToGroundEnemies(
-                            groundEnemies,
-                            playerPosition,
-                            state.facing,
-                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true));
-                    removeDefeatedGroundEnemies(groundEnemies, state);
-
-                    if (enemyHits > 0) {
-                        registerGroundEnemyHit(state, "Down Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
-                    } else if (dummyInMeleeRange) {
-                        registerDummyHit(state, "Down Slash", false, 0);
-                    } else {
-                        state.lastAction = "Down Slash";
-                        state.lastResult = "Slash triggered. No target in range.";
-                    }
+                if (enemyHits > 0) {
+                    registerGroundEnemyHit(state, "Up Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
+                } else if (dummyInMeleeRange) {
+                    registerDummyHit(state, "Up Slash", false, 0);
                 } else {
-                    startMeleeVisual(state, MeleeVisualType::Horizontal, playerPosition, state.facing);
-                    const int defeatedBefore = state.defeatedGroundEnemies;
-                    const int enemyHits = applyDamageToGroundEnemies(
-                            groundEnemies,
-                            playerPosition,
-                            state.facing,
-                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
-                    removeDefeatedGroundEnemies(groundEnemies, state);
-                    const int defeatedThisHit = state.defeatedGroundEnemies - defeatedBefore;
+                    state.lastAction = "Up Slash";
+                    state.lastResult = "Slash triggered. No target in range.";
+                }
+            } else if (!playerLockedByCast && downSlashPressed) {
+                startMeleeVisual(state, MeleeVisualType::Down, playerPosition, state.facing);
+                const int defeatedBefore = state.defeatedGroundEnemies;
+                const int enemyHits = applyDamageToGroundEnemies(
+                        groundEnemies,
+                        playerPosition,
+                        state.facing,
+                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true));
+                removeDefeatedGroundEnemies(groundEnemies, state);
 
-                    if (enemyHits > 0) {
-                        registerGroundEnemyHit(state, "Basic Attack", enemyHits, true, 11, defeatedThisHit);
-                    } else if (dummyInMeleeRange) {
-                        registerDummyHit(state, "Basic Attack", true, 11);
-                    } else {
-                        state.lastAction = "Basic Attack";
-                        state.lastResult = "No target in range.";
-                    }
+                if (enemyHits > 0) {
+                    registerGroundEnemyHit(state, "Down Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
+                } else if (dummyInMeleeRange) {
+                    registerDummyHit(state, "Down Slash", false, 0);
+                } else {
+                    state.lastAction = "Down Slash";
+                    state.lastResult = "Slash triggered. No target in range.";
+                }
+            } else if (!playerLockedByCast && basicAttackPressed) {
+                startMeleeVisual(state, MeleeVisualType::Horizontal, playerPosition, state.facing);
+                const int defeatedBefore = state.defeatedGroundEnemies;
+                const int enemyHits = applyDamageToGroundEnemies(
+                        groundEnemies,
+                        playerPosition,
+                        state.facing,
+                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
+                removeDefeatedGroundEnemies(groundEnemies, state);
+                const int defeatedThisHit = state.defeatedGroundEnemies - defeatedBefore;
+
+                if (enemyHits > 0) {
+                    registerGroundEnemyHit(state, "Basic Attack", enemyHits, true, 11, defeatedThisHit);
+                } else if (dummyInMeleeRange) {
+                    registerDummyHit(state, "Basic Attack", true, 11);
+                } else {
+                    state.lastAction = "Basic Attack";
+                    state.lastResult = "No target in range.";
                 }
             }
 
-            if (!playerLockedByCast && spellPressed) {
-                if (aimingUp) {
-                    castUpWave(state, playerPosition);
-                } else if (aimingDown) {
-                    castDownSlam(state, gameplayMap, playerPosition, dummyPosition, groundEnemies);
-                } else {
-                    castHorizontalWave(state, playerPosition);
-                }
+            if (!playerLockedByCast && upSpellPressed) {
+                castUpWave(state, playerPosition);
+            } else if (!playerLockedByCast && downSpellPressed) {
+                castDownSlam(state, gameplayMap, playerPosition, dummyPosition, groundEnemies);
+            } else if (!playerLockedByCast && horizontalSpellPressed) {
+                castHorizontalWave(state, playerPosition);
             }
 
             if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'r') || isJustPressed(keyStateManager, state, 'R'))) {

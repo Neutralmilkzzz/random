@@ -9,8 +9,8 @@
 namespace {
 
 const float kFixedDeltaSeconds = 0.016f;
-const float kRunSpeed = 10.79f;
-const float kAirMoveSpeed = 10.79f;
+const float kRunSpeed = 13.49f;
+const float kAirMoveSpeed = 13.49f;
 const float kInitialJumpUpwardSpeed = 17.11f;
 const float kDoubleJumpUpwardSpeed = 15.85f;
 const float kJumpInitialHoldTime = 0.2f;
@@ -25,7 +25,7 @@ const int kDashCooldownFrames = 18;
 
 const int kBlinkFrames = 125;
 const int kHealLockoutFrames = 188;
-const int kAttackRange = 2;
+const int kAttackRange = 3;
 const int kUpWaveVerticalReach = 5;
 const int kUpWaveUpperSpreadHalfWidth = 1;
 const int kUpWaveCrownHalfWidth = 2;
@@ -169,6 +169,7 @@ Player::Player(KeyStateManager& keyStateManager)
       jumpHoldRemaining(0.0f),
       minimumJumpRiseRemaining(0.0f),
       riseVelocityDropAccumulator(0.0f),
+      horizontalInputDirection(0),
       dashFramesRemaining(0),
       dashCooldownFrames(0),
       dashDirection(1),
@@ -203,6 +204,7 @@ void Player::resetRuntimeState() {
     jumpHoldRemaining = 0.0f;
     minimumJumpRiseRemaining = 0.0f;
     riseVelocityDropAccumulator = 0.0f;
+    horizontalInputDirection = 0;
     dashFramesRemaining = 0;
     dashCooldownFrames = 0;
     dashDirection = 1;
@@ -286,6 +288,7 @@ void Player::move(std::string& currentmap) {
 
     const bool movingLeft = isKeyDown('a') || isKeyDown('A');
     const bool movingRight = isKeyDown('d') || isKeyDown('D');
+    const int moveDirection = movingLeft == movingRight ? 0 : (movingLeft ? -1 : 1);
     const bool jumpHeld = isKeyDown(' ');
     const bool jumpJustPressed = jumpHeld && !jumpHeldLastFrame;
     const bool dashJustPressed = isJustPressed(runtimeDashKeyCode());
@@ -376,6 +379,9 @@ void Player::move(std::string& currentmap) {
 
     if (movingLeft != movingRight) {
         const float moveSpeed = grounded ? kRunSpeed : kAirMoveSpeed;
+        if (moveDirection != 0 && moveDirection != horizontalInputDirection && horizontalMoveAccumulator < 1.0f) {
+            horizontalMoveAccumulator = 1.0f;
+        }
         horizontalMoveAccumulator += moveSpeed * kFixedDeltaSeconds;
 
         while (horizontalMoveAccumulator >= 1.0f) {
@@ -417,11 +423,6 @@ void Player::move(std::string& currentmap) {
 
         if (jumpHoldRemaining > 0.0f) {
             jumpHoldRemaining = std::max(0.0f, jumpHoldRemaining - kFixedDeltaSeconds);
-        }
-
-        if (!jumpHeld && minimumJumpRiseRemaining <= 0.0f) {
-            upwardVelocity = 0.0f;
-            jumpHoldRemaining = 0.0f;
         }
 
         if (jumpHoldRemaining <= 0.0f && upwardVelocity > 0.0f) {
@@ -489,6 +490,7 @@ void Player::move(std::string& currentmap) {
         verticalMoveAccumulator = 0.0f;
     }
 
+    horizontalInputDirection = moveDirection;
     jumpHeldLastFrame = jumpHeld;
 }
 
@@ -524,13 +526,15 @@ void Player::updateCombat(const std::string& gameplayMap,
 
     const game::CombatSystem combatSystem;
 
-    const bool aimingUp = isKeyDown('w') || isKeyDown('W');
-    const bool aimingDown = isKeyDown('s') || isKeyDown('S');
-    const bool physicalPressed = isJustPressed('j') || isJustPressed('J');
-    const bool spellPressed = isJustPressed('k') || isJustPressed('K');
+    const bool basicAttackPressed = isJustPressed('j') || isJustPressed('J');
+    const bool upSlashPressed = isJustPressed('u') || isJustPressed('U');
+    const bool downSlashPressed = isJustPressed('n') || isJustPressed('N');
+    const bool horizontalSpellPressed = isJustPressed('k') || isJustPressed('K');
+    const bool upSpellPressed = isJustPressed('i') || isJustPressed('I');
+    const bool downSpellPressed = isJustPressed('m') || isJustPressed('M');
 
-    if (!isMovementLocked() && physicalPressed) {
-        if (aimingUp) {
+    if (!isMovementLocked() && (basicAttackPressed || upSlashPressed || downSlashPressed)) {
+        if (upSlashPressed) {
             startMeleeVisual(MeleeVisualType::Up, playerPosition);
             lastAction = "Up Slash";
             game::AttackDefinition attack;
@@ -549,7 +553,7 @@ void Player::updateCombat(const std::string& gameplayMap,
             } else {
                 lastResult = "Slash triggered. No target in range.";
             }
-        } else if (aimingDown) {
+        } else if (downSlashPressed) {
             startMeleeVisual(MeleeVisualType::Down, playerPosition);
             lastAction = "Down Slash";
             game::AttackDefinition attack;
@@ -590,10 +594,10 @@ void Player::updateCombat(const std::string& gameplayMap,
         }
     }
 
-    if (!isMovementLocked() && spellPressed) {
-        if (aimingUp) {
+    if (!isMovementLocked() && (horizontalSpellPressed || upSpellPressed || downSpellPressed)) {
+        if (upSpellPressed) {
             castUpWave(playerPosition);
-        } else if (aimingDown) {
+        } else if (downSpellPressed) {
             castDownSlam(gameplayMap, playerPosition);
         } else {
             castHorizontalWave(playerPosition);

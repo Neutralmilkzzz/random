@@ -25,9 +25,9 @@ const int kTitleUnavailableHintFrames = 90;
 const int kTitleStartTransitionFrames = 24;
 const int kFlyingProjectileStepFrames = 3;
 const std::string kDefaultRuntimePrompt =
-        std::string("Move with A/D, jump with SPACE, dash with ") +
+        std::string("A/D move, SPACE jump, ") +
         runtimeDashKeyLabel() +
-        ". Press E near doors or NPCs.";
+        " dash, J/U/N slash, K/I/M spell, E interact.";
 const char* kShortcutSpawnModule03 = "shortcut_spawn_module_03";
 const char* kShortcutSpawnModule05 = "shortcut_spawn_module_05";
 const char* kSkillDoubleJump = "double_jump";
@@ -110,6 +110,8 @@ struct RuntimeState {
     std::vector<game::ShopOffer> shopOffers;
     int shopSelection;
     std::string bossStatus;
+    bool pauseConfirmOpen;
+    bool pauseQuitSelected;
     std::unordered_map<int, bool> previousKeys;
 
     RuntimeState()
@@ -118,7 +120,9 @@ struct RuntimeState {
           lastInteraction("Main world ready."),
           prompt(kDefaultRuntimePrompt),
           shopOpen(false),
-          shopSelection(0) {
+          shopSelection(0),
+          pauseConfirmOpen(false),
+          pauseQuitSelected(false) {
     }
 };
 
@@ -130,8 +134,22 @@ enum class TitleMenuSelection {
 enum class TitleScreenState {
     TitleScreen,
     ContinueUnavailable,
+    ExitConfirm,
     StartTransition
 };
+
+std::string buildMenuOptionLine(const std::string& label, bool selected) {
+    return selected ? "> " + label : "  " + label;
+}
+
+std::vector<std::string> buildPauseOverlayLines(bool quitSelected) {
+    std::vector<std::string> lines;
+    lines.push_back("PAUSED");
+    lines.push_back(buildMenuOptionLine("RESUME", !quitSelected));
+    lines.push_back(buildMenuOptionLine("QUIT TO DESKTOP", quitSelected));
+    lines.push_back("W/S SELECT  ENTER CONFIRM  ESC BACK");
+    return lines;
+}
 
 enum class TitleScreenResult {
     Exit,
@@ -246,7 +264,8 @@ void placeTitleParticle(std::vector<std::string>& lines, int row, int col, char 
 std::string buildTitleScreenMap(TitleMenuSelection selection,
                                 TitleScreenState state,
                                 int animationFrame,
-                                bool hasSaveData) {
+                                bool hasSaveData,
+                                bool exitQuitSelected) {
     std::vector<std::string> lines = createTitleCanvas();
 
     const char particleA = (animationFrame / 24) % 3 == 1 ? '\'' : '.';
@@ -281,8 +300,13 @@ std::string buildTitleScreenMap(TitleMenuSelection selection,
         placeCenteredLine(lines, 18, "NO SAVE DATA TO CONTINUE");
     } else if (state == TitleScreenState::StartTransition) {
         placeCenteredLine(lines, 18, "ENTERING...");
+    } else if (state == TitleScreenState::ExitConfirm) {
+        const std::vector<std::string> confirmLines = buildPauseOverlayLines(exitQuitSelected);
+        for (size_t index = 0; index < confirmLines.size(); ++index) {
+            placeCenteredLine(lines, 18 + static_cast<int>(index), confirmLines[index]);
+        }
     } else {
-        placeCenteredLine(lines, 18, "W/S SELECT  ENTER CONFIRM  ESC EXIT");
+        placeCenteredLine(lines, 18, "W/S SELECT  ENTER CONFIRM  ESC MENU");
     }
 
     std::ostringstream frame;
@@ -308,13 +332,19 @@ TitleScreenResult runTitleScreen(MapDrawer& mapDrawer,
         keyStateManager.clearKeys();
         keyStateManager.readKeys();
 
-        if (isKeyDown(keyStateManager, 0x1B)) {
-            return TitleScreenResult::Exit;
+        if (isJustPressed(keyStateManager, previousKeys, 0x1B)) {
+            if (state == TitleScreenState::ExitConfirm) {
+                state = TitleScreenState::TitleScreen;
+                stateFrames = 0;
+            } else if (state != TitleScreenState::StartTransition) {
+                state = TitleScreenState::ExitConfirm;
+                stateFrames = 0;
+            }
         }
 
         if (state == TitleScreenState::StartTransition) {
             stateFrames++;
-            mapDrawer.currentmap = buildTitleScreenMap(selection, state, animationFrame++, hasSaveData);
+            mapDrawer.currentmap = buildTitleScreenMap(selection, state, animationFrame++, hasSaveData, false);
             mapDrawer.draw();
             previousKeys = keyStateManager.keyStates;
             if (stateFrames >= kTitleStartTransitionFrames) {
@@ -322,6 +352,33 @@ TitleScreenResult runTitleScreen(MapDrawer& mapDrawer,
                         ? TitleScreenResult::NewGame
                         : TitleScreenResult::ContinueGame;
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
+            continue;
+        }
+
+        if (state == TitleScreenState::ExitConfirm) {
+            if (isJustPressed(keyStateManager, previousKeys, 'w') ||
+                isJustPressed(keyStateManager, previousKeys, 'W') ||
+                isJustPressed(keyStateManager, previousKeys, 's') ||
+                isJustPressed(keyStateManager, previousKeys, 'S')) {
+                stateFrames = stateFrames == 0 ? 1 : 0;
+            }
+
+            if (isJustPressed(keyStateManager, previousKeys, 0x0D)) {
+                if (stateFrames != 0) {
+                    return TitleScreenResult::Exit;
+                }
+                state = TitleScreenState::TitleScreen;
+                stateFrames = 0;
+            }
+
+            mapDrawer.currentmap = buildTitleScreenMap(selection,
+                                                       state,
+                                                       animationFrame++,
+                                                       hasSaveData,
+                                                       stateFrames != 0);
+            mapDrawer.draw();
+            previousKeys = keyStateManager.keyStates;
             std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
             continue;
         }
@@ -359,7 +416,7 @@ TitleScreenResult runTitleScreen(MapDrawer& mapDrawer,
             }
         }
 
-        mapDrawer.currentmap = buildTitleScreenMap(selection, state, animationFrame++, hasSaveData);
+        mapDrawer.currentmap = buildTitleScreenMap(selection, state, animationFrame++, hasSaveData, false);
         mapDrawer.draw();
         previousKeys = keyStateManager.keyStates;
         std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
@@ -399,7 +456,7 @@ RuntimeNpcInfo getNpcInfo(const std::string& npcId) {
     if (npcId == "village_elder" || npcId == "village_chief") {
         RuntimeNpcInfo npc;
         npc.displayName = "Chief";
-        npc.glyph = 'L';
+        npc.glyph = 'O';
         npc.opensShop = false;
         npc.interactionText = "Head right and clear the next rooms. The upper shortcut opens later.";
         return npc;
@@ -1001,6 +1058,11 @@ void updatePrompt(const game::MapDefinition& mapDefinition,
                   const game::SaveData& saveData,
                   const game::Position& playerPosition,
                   RuntimeState& state) {
+    if (state.pauseConfirmOpen) {
+        state.prompt = "Paused. W/S select, ENTER confirm, ESC back.";
+        return;
+    }
+
     if (state.shopOpen) {
         state.prompt = "Shop open. W/S select, J buy, E close.";
         return;
@@ -1025,12 +1087,14 @@ void updatePrompt(const game::MapDefinition& mapDefinition,
 std::string buildBottomFooter(const RuntimeState& state, const game::SaveData& saveData) {
     std::ostringstream footer;
     footer << "\n";
-    footer << "A/D Move  SPACE Jump  " << runtimeDashKeyLabel() << " Dash  W/S Aim";
+    footer << "A/D Move  SPACE Jump  " << runtimeDashKeyLabel() << " Dash  E Interact";
     if (hasUnlockedSkill(saveData, game::SkillId::DoubleJump)) {
         footer << "  SPACE Double Jump";
     }
     footer << "\n";
-    footer << "J Attack  K Spell  R Heal  P Reset  ESC Exit";
+    footer << "J Slash  U Up Slash  N Down Slash";
+    footer << "\n";
+    footer << "K Spell  I Up Spell  M Down Spell  R Heal  P Reset  ESC Pause";
     if (state.prompt != kDefaultRuntimePrompt) {
         footer << "\n" << state.prompt;
     }
@@ -1468,12 +1532,39 @@ int main() {
         keyStateManager.clearKeys();
         keyStateManager.readKeys();
 
-        if (isKeyDown(keyStateManager, 0x1B)) {
-            break;
+        if (isJustPressed(keyStateManager, state.previousKeys, 0x1B)) {
+            if (state.pauseConfirmOpen) {
+                state.pauseConfirmOpen = false;
+                state.pauseQuitSelected = false;
+                state.lastInteraction = "Resumed gameplay.";
+            } else {
+                state.pauseConfirmOpen = true;
+                state.pauseQuitSelected = false;
+                state.lastInteraction = "Pause menu opened.";
+            }
+        }
+
+        if (state.pauseConfirmOpen) {
+            if (isJustPressed(keyStateManager, state.previousKeys, 'w') ||
+                isJustPressed(keyStateManager, state.previousKeys, 'W') ||
+                isJustPressed(keyStateManager, state.previousKeys, 's') ||
+                isJustPressed(keyStateManager, state.previousKeys, 'S')) {
+                state.pauseQuitSelected = !state.pauseQuitSelected;
+            }
+
+            if (isJustPressed(keyStateManager, state.previousKeys, 0x0D)) {
+                if (state.pauseQuitSelected) {
+                    break;
+                }
+                state.pauseConfirmOpen = false;
+                state.pauseQuitSelected = false;
+                state.lastInteraction = "Resumed gameplay.";
+            }
         }
 
         if (bossEncounter.active &&
             bossEncounter.dialogueActive &&
+            !state.pauseConfirmOpen &&
             isJustPressed(keyStateManager, state.previousKeys, 0x0D)) {
             bossEncounter.dialogueIndex++;
             if (bossEncounter.dialogueIndex >= static_cast<int>(bossEncounter.dialogueLines.size())) {
@@ -1483,6 +1574,7 @@ int main() {
             }
         } else if (bossEncounter.active &&
                    bossEncounter.victoryActive &&
+                   !state.pauseConfirmOpen &&
                    isJustPressed(keyStateManager, state.previousKeys, 0x0D)) {
             bossEncounter.victoryActive = false;
             bossEncounter.active = false;
@@ -1491,8 +1583,9 @@ int main() {
             gameSession.resumeGameplay();
         }
 
-        if (isJustPressed(keyStateManager, state.previousKeys, 'p') ||
-            isJustPressed(keyStateManager, state.previousKeys, 'P')) {
+        if (!state.pauseConfirmOpen &&
+            (isJustPressed(keyStateManager, state.previousKeys, 'p') ||
+             isJustPressed(keyStateManager, state.previousKeys, 'P'))) {
             player.restoreSavedStats(saveData.playerStats);
             applyPersistentSkillsToPlayer(player, saveData);
             currentMapDefinition = mapLoader.loadMap(saveData.currentMapId);
@@ -1512,7 +1605,7 @@ int main() {
         updatePrompt(currentMapDefinition, saveData, playerPosition, state);
         updateBossPrompt(state, bossEncounter);
 
-        if (state.shopOpen && !state.shopOffers.empty()) {
+        if (!state.pauseConfirmOpen && state.shopOpen && !state.shopOffers.empty()) {
             if (isJustPressed(keyStateManager, state.previousKeys, 'w') ||
                 isJustPressed(keyStateManager, state.previousKeys, 'W')) {
                 state.shopSelection--;
@@ -1528,7 +1621,8 @@ int main() {
             }
         }
 
-        if (state.shopOpen &&
+        if (!state.pauseConfirmOpen &&
+            state.shopOpen &&
             (isJustPressed(keyStateManager, state.previousKeys, 'j') ||
              isJustPressed(keyStateManager, state.previousKeys, 'J'))) {
             applyShopPurchase(player, state, saveData);
@@ -1537,8 +1631,9 @@ int main() {
             saveSystem.saveOnMapEntry(saveData);
         }
 
-        if (isJustPressed(keyStateManager, state.previousKeys, 'e') ||
-            isJustPressed(keyStateManager, state.previousKeys, 'E')) {
+        if (!state.pauseConfirmOpen &&
+            (isJustPressed(keyStateManager, state.previousKeys, 'e') ||
+             isJustPressed(keyStateManager, state.previousKeys, 'E'))) {
             if (state.shopOpen) {
                 state.shopOpen = false;
                 state.shopNpcId.clear();
@@ -1605,7 +1700,8 @@ int main() {
             }
         }
 
-        const bool bossSequenceBlockingGameplay = bossEncounter.dialogueActive || bossEncounter.victoryActive;
+        const bool bossSequenceBlockingGameplay =
+                state.pauseConfirmOpen || bossEncounter.dialogueActive || bossEncounter.victoryActive;
 
         if (!state.shopOpen && !bossSequenceBlockingGameplay) {
             std::string collisionMap = buildCollisionMap(terrainMap,
@@ -1754,6 +1850,8 @@ int main() {
             victoryLines.push_back("Reward +" + std::to_string(bossEncounter.rewardHkd) + " HKD");
             victoryLines.push_back("ENTER");
             overlayCenteredLines(renderMap, 4, victoryLines);
+        } else if (state.pauseConfirmOpen) {
+            overlayCenteredLines(renderMap, 4, buildPauseOverlayLines(state.pauseQuitSelected));
         }
         mapDrawer.currentmap = player.buildHud(currentMapDefinition.displayName) +
                                renderMap +

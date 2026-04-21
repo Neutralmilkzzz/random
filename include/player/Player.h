@@ -194,6 +194,7 @@ private:
     float jumpHoldRemaining;
     float minimumJumpRiseRemaining;
     float riseVelocityDropAccumulator;
+    int horizontalInputDirection;
     int dashFramesRemaining;
     int dashCooldownFrames;
     int dashDirection;
