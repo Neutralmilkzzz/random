@@ -117,7 +117,8 @@ class LoreNpc : public Npc {
 public:
     LoreNpc(const std::string& idValue,
             const std::string& displayNameValue,
-            const std::vector<DialogueLine>& dialogueValue);
+            const std::vector<DialogueLine>& dialogueValue,
+            NpcType npcTypeValue = NpcType::Lore);
 
     std::vector<DialogueLine> getDialogue() const override;
 

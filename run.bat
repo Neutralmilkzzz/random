@@ -12,7 +12,7 @@ if errorlevel 1 (
 )
 
 echo [1/2] Compiling...
-g++ -std=c++11 -Wall -Wextra -O2 -Iinclude src\core\main.cpp src\enemy\Enemy.cpp src\world\WorldSystem.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp -o testcpp1.exe
+g++ -std=c++11 -Wall -Wextra -O2 -Iinclude src\core\main.cpp src\core\GameSession.cpp src\enemy\Enemy.cpp src\npc\NpcSystem.cpp src\save\SaveSystem.cpp src\world\WorldSystem.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp -o testcpp1.exe
 if errorlevel 1 (
     echo.
     echo [ERROR] Build failed.

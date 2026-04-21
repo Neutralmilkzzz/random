@@ -683,4 +683,588 @@ void FlyingEnemy::startAttack() {
     moveAccumulator = 0.0f;
 }
 
+Boss::Boss(const std::string& enemyId,
+           EnemyType type,
+           const Position& initialSpawnPosition,
+           char renderGlyph)
+    : id(enemyId),
+      enemyType(type),
+      position(initialSpawnPosition),
+      spawnPosition(initialSpawnPosition),
+      facingDirection(FacingDirection::Left),
+      state(BossState::Dormant),
+      alive(true),
+      baseRenderGlyph(renderGlyph),
+      queuedAttackSignal(),
+      attackSignalQueued(false),
+      moveAccumulator(0.0f),
+      moveStepSeconds(0.18f),
+      introRemaining(0.0f),
+      attackStartupRemaining(0.0f),
+      attackRecoveryRemaining(0.0f),
+      staggerRemaining(0.0f),
+      hitFlashSeconds(0.12f),
+      deathFlashSeconds(0.10f),
+      deathMarkerSeconds(0.12f),
+      deathAnimationRemaining(0.0f),
+      staggerThreshold(6),
+      damageTakenSinceLastStagger(0),
+      staggerWindow(false, 5.0f, 0.0f),
+      startupAttackType(BossAttackType::None),
+      startupRecoverySeconds(0.0f) {
+}
+
+const std::string& Boss::getId() const {
+    return id;
+}
+
+Position Boss::getPosition() const {
+    return position;
+}
+
+FacingDirection Boss::getFacingDirection() const {
+    return facingDirection;
+}
+
+const CharacterStats& Boss::getStats() const {
+    return stats;
+}
+
+CharacterStats& Boss::accessStats() {
+    return stats;
+}
+
+HitFeedbackState& Boss::accessHitFeedback() {
+    return hitFeedback;
+}
+
+void Boss::takeDamage(const DamageInfo& damageInfo) {
+    if (!alive || hitFeedback.invulnerabilitySeconds > 0.0f) {
+        return;
+    }
+
+    stats.health.current -= damageInfo.amount;
+    hitFeedback.blinking = true;
+    hitFeedback.blinkDurationSeconds = hitFlashSeconds;
+    hitFeedback.invulnerabilitySeconds = hitFlashSeconds;
+
+    if (damageInfo.amount > 0) {
+        CombatSystem combatSystem;
+        if (!staggerWindow.active) {
+            combatSystem.openTimedWindow(staggerWindow, 5.0f);
+        }
+        damageTakenSinceLastStagger += damageInfo.amount;
+    }
+
+    if (stats.health.current <= 0) {
+        stats.health.current = 0;
+        alive = false;
+        state = BossState::Dead;
+        attackSignalQueued = false;
+        queuedAttackSignal = BossAttackSignal();
+        introRemaining = 0.0f;
+        attackStartupRemaining = 0.0f;
+        attackRecoveryRemaining = 0.0f;
+        staggerRemaining = 0.0f;
+        moveAccumulator = 0.0f;
+        deathAnimationRemaining = deathFlashSeconds + deathMarkerSeconds;
+        hitFeedback.blinking = false;
+        hitFeedback.blinkDurationSeconds = 0.0f;
+        hitFeedback.invulnerabilitySeconds = 0.0f;
+        resetStaggerMeter();
+    }
+}
+
+bool Boss::isAlive() const {
+    return alive;
+}
+
+void Boss::setPosition(const Position& newPosition) {
+    position = newPosition;
+}
+
+void Boss::setSpawnPosition(const Position& newSpawnPosition) {
+    spawnPosition = newSpawnPosition;
+}
+
+Position Boss::getSpawnPosition() const {
+    return spawnPosition;
+}
+
+BossState Boss::getState() const {
+    return state;
+}
+
+bool Boss::isRenderable() const {
+    return alive || deathAnimationRemaining > 0.0f;
+}
+
+bool Boss::shouldDespawn() const {
+    return !alive && deathAnimationRemaining <= 0.0f;
+}
+
+char Boss::getRenderGlyph() const {
+    if (!alive) {
+        if (deathAnimationRemaining > deathMarkerSeconds) {
+            return '*';
+        }
+        if (deathAnimationRemaining > 0.0f) {
+            return 'x';
+        }
+        return ' ';
+    }
+
+    if (state == BossState::Staggered) {
+        return '&';
+    }
+
+    if (hitFeedback.blinking) {
+        return '*';
+    }
+
+    return baseRenderGlyph;
+}
+
+bool Boss::consumeAttackSignal(BossAttackSignal& signal) {
+    if (!attackSignalQueued) {
+        return false;
+    }
+
+    signal = queuedAttackSignal;
+    queuedAttackSignal = BossAttackSignal();
+    attackSignalQueued = false;
+    return true;
+}
+
+bool Boss::isStaggered() const {
+    return state == BossState::Staggered;
+}
+
+int Boss::getStaggerThreshold() const {
+    return staggerThreshold;
+}
+
+int Boss::getStaggerDamage() const {
+    return damageTakenSinceLastStagger;
+}
+
+bool Boss::isStaggerWindowActive() const {
+    return staggerWindow.active;
+}
+
+float Boss::getStaggerWindowRemaining() const {
+    if (!staggerWindow.active) {
+        return 0.0f;
+    }
+
+    return std::max(0.0f, staggerWindow.durationSeconds - staggerWindow.elapsedSeconds);
+}
+
+bool Boss::shouldEnterStagger() const {
+    return alive &&
+           state != BossState::Dead &&
+           state != BossState::Staggered &&
+           damageTakenSinceLastStagger >= staggerThreshold;
+}
+
+void Boss::resetStaggerMeter() {
+    damageTakenSinceLastStagger = 0;
+    staggerWindow.active = false;
+    staggerWindow.elapsedSeconds = 0.0f;
+}
+
+bool Boss::updateCommonState(float deltaSeconds) {
+    updateHitFeedback(deltaSeconds);
+
+    CombatSystem combatSystem;
+    combatSystem.advanceTimedWindow(staggerWindow, deltaSeconds);
+    if (!staggerWindow.active && damageTakenSinceLastStagger > 0 && state != BossState::Staggered) {
+        resetStaggerMeter();
+    }
+
+    if (!alive) {
+        state = BossState::Dead;
+        return true;
+    }
+
+    if (state == BossState::Intro) {
+        introRemaining -= deltaSeconds;
+        if (introRemaining <= 0.0f) {
+            introRemaining = 0.0f;
+            state = BossState::Positioning;
+        }
+        return true;
+    }
+
+    if (state == BossState::AttackStartup) {
+        attackStartupRemaining -= deltaSeconds;
+        if (attackStartupRemaining <= 0.0f) {
+            attackStartupRemaining = 0.0f;
+            queuedAttackSignal = BossAttackSignal(startupAttackType, position, facingDirection);
+            attackSignalQueued = true;
+            state = BossState::AttackRecovery;
+            attackRecoveryRemaining = startupRecoverySeconds;
+        }
+        return true;
+    }
+
+    if (state == BossState::AttackRecovery) {
+        attackRecoveryRemaining -= deltaSeconds;
+        if (attackRecoveryRemaining <= 0.0f) {
+            finishRecovery();
+        }
+        return true;
+    }
+
+    if (state == BossState::Staggered) {
+        staggerRemaining -= deltaSeconds;
+        if (staggerRemaining <= 0.0f) {
+            staggerRemaining = 0.0f;
+            state = BossState::Positioning;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+void Boss::updateHitFeedback(float deltaSeconds) {
+    if (hitFeedback.blinkDurationSeconds > 0.0f) {
+        hitFeedback.blinkDurationSeconds -= deltaSeconds;
+        if (hitFeedback.blinkDurationSeconds <= 0.0f) {
+            hitFeedback.blinkDurationSeconds = 0.0f;
+            hitFeedback.blinking = false;
+        }
+    }
+
+    if (hitFeedback.invulnerabilitySeconds > 0.0f) {
+        hitFeedback.invulnerabilitySeconds -= deltaSeconds;
+        if (hitFeedback.invulnerabilitySeconds < 0.0f) {
+            hitFeedback.invulnerabilitySeconds = 0.0f;
+        }
+    }
+
+    if (deathAnimationRemaining > 0.0f) {
+        deathAnimationRemaining -= deltaSeconds;
+        if (deathAnimationRemaining < 0.0f) {
+            deathAnimationRemaining = 0.0f;
+        }
+    }
+}
+
+void Boss::faceToward(const Position& targetPosition) {
+    if (targetPosition.x < position.x) {
+        facingDirection = FacingDirection::Left;
+    } else if (targetPosition.x > position.x) {
+        facingDirection = FacingDirection::Right;
+    }
+}
+
+void Boss::moveToward(const Position& targetPosition, float deltaSeconds) {
+    if (position.x == targetPosition.x && position.y == targetPosition.y) {
+        moveAccumulator = 0.0f;
+        return;
+    }
+
+    moveAccumulator += deltaSeconds;
+    while (moveAccumulator >= moveStepSeconds) {
+        moveAccumulator -= moveStepSeconds;
+
+        if (position.x != targetPosition.x) {
+            position.x += position.x < targetPosition.x ? 1 : -1;
+        }
+
+        if (position.y != targetPosition.y) {
+            position.y += position.y < targetPosition.y ? 1 : -1;
+        }
+    }
+}
+
+bool Boss::isWithinHorizontalRange(const Position& targetPosition, float range) const {
+    return std::abs(targetPosition.x - position.x) <= static_cast<int>(range);
+}
+
+bool Boss::isWithinVerticalRange(const Position& targetPosition, float range) const {
+    return std::abs(targetPosition.y - position.y) <= static_cast<int>(range);
+}
+
+void Boss::wakeUp(float introSeconds) {
+    if (state != BossState::Dormant) {
+        return;
+    }
+
+    state = BossState::Intro;
+    introRemaining = introSeconds;
+    moveAccumulator = 0.0f;
+}
+
+void Boss::startAttack(BossAttackType attackType, float startupSeconds, float recoverySeconds) {
+    startupAttackType = attackType;
+    startupRecoverySeconds = recoverySeconds;
+    attackStartupRemaining = startupSeconds;
+    attackRecoveryRemaining = 0.0f;
+    state = BossState::AttackStartup;
+    attackSignalQueued = false;
+    queuedAttackSignal = BossAttackSignal();
+    moveAccumulator = 0.0f;
+}
+
+void Boss::enterStagger(float staggerSeconds) {
+    state = BossState::Staggered;
+    staggerRemaining = staggerSeconds;
+    introRemaining = 0.0f;
+    attackStartupRemaining = 0.0f;
+    attackRecoveryRemaining = 0.0f;
+    attackSignalQueued = false;
+    queuedAttackSignal = BossAttackSignal();
+    moveAccumulator = 0.0f;
+    resetStaggerMeter();
+}
+
+void Boss::finishRecovery() {
+    attackRecoveryRemaining = 0.0f;
+    state = BossState::Positioning;
+}
+
+MeleeBoss::MeleeBoss(const std::string& enemyId, const Position& initialSpawnPosition)
+    : Boss(enemyId, EnemyType::BossMelee, initialSpawnPosition, 'B'),
+      aggroRange(18.0f),
+      loseAggroRange(24.0f),
+      slashRange(2.0f),
+      dashRange(7.0f),
+      introSeconds(0.55f),
+      attackStartupSeconds(0.45f),
+      attackRecoverySeconds(0.70f),
+      staggerSeconds(1.10f) {
+    stats.health.current = 18;
+    stats.health.maximum = 18;
+    staggerThreshold = 7;
+    moveStepSeconds = 0.14f;
+}
+
+EnemyType MeleeBoss::getEnemyType() const {
+    return EnemyType::BossMelee;
+}
+
+void MeleeBoss::updateAI(const Position& playerPosition, float deltaSeconds) {
+    if (updateCommonState(deltaSeconds)) {
+        return;
+    }
+
+    if (shouldEnterStagger()) {
+        enterStagger(staggerSeconds);
+        return;
+    }
+
+    const float absX = static_cast<float>(std::abs(playerPosition.x - position.x));
+    const float absY = static_cast<float>(std::abs(playerPosition.y - position.y));
+    faceToward(playerPosition);
+
+    if (state == BossState::Dormant) {
+        if (absX <= aggroRange && absY <= 4.0f) {
+            wakeUp(introSeconds);
+        }
+        return;
+    }
+
+    if (absX > loseAggroRange) {
+        moveToward(spawnPosition, deltaSeconds);
+        return;
+    }
+
+    if (absY <= 1.0f && absX <= slashRange) {
+        startAttack(BossAttackType::SweepSlash, attackStartupSeconds, attackRecoverySeconds);
+        return;
+    }
+
+    if (absY <= 1.0f && absX <= dashRange) {
+        startAttack(BossAttackType::DashSlash, attackStartupSeconds + 0.12f, attackRecoverySeconds + 0.10f);
+        return;
+    }
+
+    Position target = position;
+    if (playerPosition.x != position.x) {
+        target.x += playerPosition.x > position.x ? 1 : -1;
+    }
+    if (std::abs(playerPosition.y - position.y) > 1) {
+        target.y += playerPosition.y > position.y ? 1 : -1;
+    }
+    moveToward(target, deltaSeconds);
+}
+
+AttackDefinition MeleeBoss::getPrimaryAttack() const {
+    return getFrontJumpSlash();
+}
+
+AttackDefinition MeleeBoss::getAttackForType(BossAttackType attackType) const {
+    switch (attackType) {
+    case BossAttackType::SweepSlash:
+        return getFrontJumpSlash();
+    case BossAttackType::DashSlash:
+        return getFrontDash();
+    default:
+        return getPrimaryAttack();
+    }
+}
+
+AttackDefinition MeleeBoss::getBackDashSlash() const {
+    AttackDefinition attack;
+    attack.id = id + "_back_dash_slash";
+    attack.damage = DamageInfo(1, DamageType::Dash, id, true);
+    attack.startupSeconds = attackStartupSeconds + 0.10f;
+    attack.activeSeconds = 0.16f;
+    attack.recoverySeconds = attackRecoverySeconds;
+    attack.knockbackX = facingDirection == FacingDirection::Right ? -2 : 2;
+    return attack;
+}
+
+AttackDefinition MeleeBoss::getFrontJumpSlash() const {
+    AttackDefinition attack;
+    attack.id = id + "_front_jump_slash";
+    attack.damage = DamageInfo(2, DamageType::BasicAttack, id, true);
+    attack.startupSeconds = attackStartupSeconds;
+    attack.activeSeconds = 0.18f;
+    attack.recoverySeconds = attackRecoverySeconds;
+    attack.knockbackX = facingDirection == FacingDirection::Right ? 1 : -1;
+    attack.knockbackY = -1;
+    return attack;
+}
+
+AttackDefinition MeleeBoss::getFrontDash() const {
+    AttackDefinition attack;
+    attack.id = id + "_front_dash";
+    attack.damage = DamageInfo(2, DamageType::Dash, id, true);
+    attack.startupSeconds = attackStartupSeconds + 0.12f;
+    attack.activeSeconds = 0.14f;
+    attack.recoverySeconds = attackRecoverySeconds + 0.10f;
+    attack.knockbackX = facingDirection == FacingDirection::Right ? 2 : -2;
+    return attack;
+}
+
+int MeleeBoss::getHkdReward() const {
+    return 60;
+}
+
+RangedBoss::RangedBoss(const std::string& enemyId, const Position& initialSpawnPosition)
+    : Boss(enemyId, EnemyType::BossRanged, initialSpawnPosition, 'Q'),
+      aggroRange(20.0f),
+      loseAggroRange(26.0f),
+      castRange(10.0f),
+      retreatRange(4.0f),
+      introSeconds(0.65f),
+      attackStartupSeconds(0.40f),
+      attackRecoverySeconds(0.75f),
+      staggerSeconds(1.20f),
+      nextAttackMeteor(false) {
+    stats.health.current = 14;
+    stats.health.maximum = 14;
+    staggerThreshold = 6;
+    moveStepSeconds = 0.18f;
+}
+
+EnemyType RangedBoss::getEnemyType() const {
+    return EnemyType::BossRanged;
+}
+
+void RangedBoss::updateAI(const Position& playerPosition, float deltaSeconds) {
+    if (updateCommonState(deltaSeconds)) {
+        return;
+    }
+
+    if (shouldEnterStagger()) {
+        enterStagger(staggerSeconds);
+        nextAttackMeteor = false;
+        return;
+    }
+
+    const float absX = static_cast<float>(std::abs(playerPosition.x - position.x));
+    const float absY = static_cast<float>(std::abs(playerPosition.y - position.y));
+    faceToward(playerPosition);
+
+    if (state == BossState::Dormant) {
+        if (absX <= aggroRange && absY <= 6.0f) {
+            wakeUp(introSeconds);
+        }
+        return;
+    }
+
+    if (absX > loseAggroRange) {
+        moveToward(spawnPosition, deltaSeconds);
+        return;
+    }
+
+    if (absX <= castRange && absY <= 5.0f) {
+        const BossAttackType nextAttack = nextAttackMeteor ? BossAttackType::MeteorDrop : BossAttackType::FireballBurst;
+        nextAttackMeteor = !nextAttackMeteor;
+        startAttack(nextAttack,
+                    nextAttack == BossAttackType::MeteorDrop ? attackStartupSeconds + 0.15f : attackStartupSeconds,
+                    nextAttack == BossAttackType::MeteorDrop ? attackRecoverySeconds + 0.15f : attackRecoverySeconds);
+        return;
+    }
+
+    Position target = position;
+    if (absX < retreatRange) {
+        target.x += playerPosition.x < position.x ? 1 : -1;
+    } else if (playerPosition.x != position.x) {
+        target.x += playerPosition.x > position.x ? 1 : -1;
+    }
+
+    if (std::abs(playerPosition.y - position.y) > 2) {
+        target.y += playerPosition.y > position.y ? 1 : -1;
+    }
+    moveToward(target, deltaSeconds);
+}
+
+AttackDefinition RangedBoss::getPrimaryAttack() const {
+    return getFireballShot();
+}
+
+AttackDefinition RangedBoss::getAttackForType(BossAttackType attackType) const {
+    switch (attackType) {
+    case BossAttackType::FireballBurst:
+        return getFireballShot();
+    case BossAttackType::MeteorDrop:
+        return getMeteorRain();
+    case BossAttackType::SweepSlash:
+        return getStaffKnockback();
+    default:
+        return getPrimaryAttack();
+    }
+}
+
+AttackDefinition RangedBoss::getStaffKnockback() const {
+    AttackDefinition attack;
+    attack.id = id + "_staff_knockback";
+    attack.damage = DamageInfo(1, DamageType::StaffHit, id, true);
+    attack.startupSeconds = 0.25f;
+    attack.activeSeconds = 0.12f;
+    attack.recoverySeconds = 0.35f;
+    attack.knockbackX = facingDirection == FacingDirection::Right ? 1 : -1;
+    return attack;
+}
+
+AttackDefinition RangedBoss::getFireballShot() const {
+    AttackDefinition attack;
+    attack.id = id + "_fireball_burst";
+    attack.damage = DamageInfo(1, DamageType::Fireball, id, false);
+    attack.startupSeconds = attackStartupSeconds;
+    attack.activeSeconds = 0.15f;
+    attack.recoverySeconds = attackRecoverySeconds;
+    return attack;
+}
+
+AttackDefinition RangedBoss::getMeteorRain() const {
+    AttackDefinition attack;
+    attack.id = id + "_meteor_drop";
+    attack.damage = DamageInfo(1, DamageType::Meteor, id, false);
+    attack.startupSeconds = attackStartupSeconds + 0.15f;
+    attack.activeSeconds = 0.20f;
+    attack.recoverySeconds = attackRecoverySeconds + 0.15f;
+    return attack;
+}
+
+int RangedBoss::getHkdReward() const {
+    return 70;
+}
+
 } // namespace game

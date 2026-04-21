@@ -501,24 +501,42 @@ const game::CharacterStats& Player::getStats() const {
     return stats;
 }
 
+void Player::restoreSavedStats(const game::CharacterStats& savedStats) {
+    resetRuntimeState();
+    stats = savedStats;
+    if (stats.health.maximum <= 0) {
+        stats.health.maximum = 5;
+    }
+    if (stats.soul.maximum <= 0) {
+        stats.soul.maximum = kSoulMeterMax;
+    }
+    stats.health.current = std::max(1, std::min(stats.health.current, stats.health.maximum));
+    stats.soul.current = std::max(0, std::min(stats.soul.current, stats.soul.maximum));
+    if (stats.hkd < 0) {
+        stats.hkd = 0;
+    }
+}
+
 game::FacingDirection Player::getFacingDirection() const {
     return facing;
 }
 
 std::string Player::buildHud() const {
+    return buildHud(std::string());
+}
+
+std::string Player::buildHud(const std::string& locationName) const {
     std::ostringstream hud;
     const std::vector<std::string> soulLines = buildSoulVesselLines();
     for (size_t index = 0; index < soulLines.size(); ++index) {
         hud << soulLines[index] << "\n";
     }
     hud << buildHealthOrbLine() << "\n";
-    hud << "[Main] ESC exit | P reset room\n";
-    hud << "Move A/D  Look W/S  Jump SPACE  Attack J  Spell K  W+J UpSlash  S+J DownSlash  W+K UpWave  S+K Slam  Heal R\n";
-    hud << "Facing " << (facing == game::FacingDirection::Right ? "Right" : "Left")
-        << " | Heal Ready " << (framesSinceLastDamage >= kHealLockoutFrames ? "YES" : "NO")
-        << " | HKD " << stats.hkd << "\n";
-    hud << "Last Action: " << lastAction << "\n";
-    hud << "Last Result: " << lastResult << "\n\n";
+    hud << "HKD " << stats.hkd;
+    if (!locationName.empty()) {
+        hud << " | Location " << locationName;
+    }
+    hud << "\n\n";
     return hud.str();
 }
 

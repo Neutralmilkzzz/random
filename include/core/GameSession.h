@@ -32,6 +32,9 @@ public:
     void markBossDefeated(const std::string& bossId);
     GameFlowState getFlowState() const;
     const RunStatistics& getRunStatistics() const;
+    const SaveData& getActiveSave() const;
+    void setActiveSave(const SaveData& saveData);
+    bool hasSaveData() const;
 
 private:
     GameFlowState flowState = GameFlowState::MainMenu;
@@ -39,6 +42,7 @@ private:
     RunStatistics runStatistics;
     SaveData activeSave;
     bool hasActiveSave = false;
+    float accumulatedSeconds = 0.0f;
 };
 
 } // namespace game

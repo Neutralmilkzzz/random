@@ -145,7 +145,7 @@ SandboxNpcInfo getNpcInfo(const std::string& npcId) {
         npc.displayName = "Chief";
         npc.glyph = 'L';
         npc.opensShop = false;
-        npc.interactionText = "村长正在等待后续对白接线。";
+        npc.interactionText = "Head right and clear the next rooms. The upper shortcut opens later.";
         return npc;
     }
 
@@ -155,7 +155,7 @@ SandboxNpcInfo getNpcInfo(const std::string& npcId) {
         npc.displayName = "Doctor";
         npc.glyph = 'D';
         npc.opensShop = false;
-        npc.interactionText = "医生看了你一眼，准备接诊。（具体对话内容待补）";
+        npc.interactionText = "Doctor hook is ready. Full-heal behavior can be tested here later.";
         return npc;
     }
 
@@ -165,7 +165,7 @@ SandboxNpcInfo getNpcInfo(const std::string& npcId) {
         npc.displayName = "Merchant";
         npc.glyph = 'M';
         npc.opensShop = false;
-        npc.interactionText = "商店逻辑待补，现在先保留站位，不再打开占位面板。";
+        npc.interactionText = "Merchant hook is ready. Placeholder shop panel stays disabled.";
         return npc;
     }
 
@@ -175,7 +175,7 @@ SandboxNpcInfo getNpcInfo(const std::string& npcId) {
         npc.displayName = "Event Marker";
         npc.glyph = '?';
         npc.opensShop = false;
-        npc.interactionText = "事件逻辑待补，现在这里只是预留位。";
+        npc.interactionText = "Event hook placeholder.";
         return npc;
     }
 
@@ -184,7 +184,7 @@ SandboxNpcInfo getNpcInfo(const std::string& npcId) {
     npc.displayName = "NPC";
     npc.glyph = 'N';
     npc.opensShop = false;
-    npc.interactionText = "NPC 占位。";
+    npc.interactionText = "NPC placeholder.";
     return npc;
 }
 
@@ -267,9 +267,9 @@ std::string buildHud(const game::MapDefinition& mapDefinition,
     hud << "Last Interaction: " << state.lastInteraction << "\n";
     if (state.shopOpen) {
         hud << "[Merchant Shop Placeholder]\n";
-        hud << "- 货物列表待补\n";
-        hud << "- 价格待补\n";
-        hud << "- 按 E 再次关闭商店\n";
+        hud << "- Offer list pending\n";
+        hud << "- Prices pending\n";
+        hud << "- Press E to close\n";
     }
     hud << "\n";
     return hud.str();

@@ -17,10 +17,10 @@
 
 | Copilot 名称 | Resume | 负责模块 | 当前状态 | 最新进展 | 阻塞 | 接手人 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Copilot CLI（GPT-5.4） | `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 项目结构、构建入口、沙盒、地面敌人、飞行敌人原型、参数文档、`module_02 / module_04` 地图细化 | 进行中 | 已完成地面怪与飞行怪正式模块化并接入主循环；补上击杀 +10 HKD / `+10` 飘字；细化 `module_02`、`module_04` 战斗白盒地图 | Combat reward 中间层重构等待 PlayerSandbox 侧改动稳定 | 下一位接手统一战斗结算、掉落系统或继续扩图的人 |
+| Copilot CLI（GPT-5.4） | `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 项目结构、构建入口、沙盒、地面敌人、飞行敌人原型、Boss 原型 / `CombatSystem`、参数文档、`module_02 / module_04` 地图细化 | 进行中 | 已认领并行任务 B：Boss 原型 / 敌人扩展 / 战斗结算层最小化；此前已完成地面怪与飞行怪正式模块化并接入主循环，补上击杀 +10 HKD / `+10` 飘字，并细化 `module_02`、`module_04` 战斗白盒地图 | 本轮禁止改 `main.cpp`，后续需主流程位预留 Boss 刷入与正式接线口 | 下一位接手主流程接线或继续补完整 Boss/Battle loop 的 Copilot |
 | Copilot CLI（GPT-5.4） | 待填写（当前会话 resume 退出后补） | 技能/攻击 ASCII 表现设计、法术分镜、显示语义约定 | 进行中 | 已补充左右冲击波、下砸、普通攻击缺口、敌人受伤/死亡、HKD/HUD 与 `YOU DEAD` 白屏死亡演出的 ASCII 方案 | 无 | 下一位接手技能正式渲染接入、玩家攻击判定或死亡演出落地的 Copilot |
-| Copilot CLI（GPT-5.4） | `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 玩家沙盒、敌人沙盒、MapDrawer 渲染、参数同步、主线 Player 接入、`module_01 / module_03` 地图细化 | 已完成 | 已完成玩家攻击/法术/HUD/`YOU DEAD` 死亡演出接入主线 `Player.cpp`，改成 `W/S` + `J/K` 组合键映射，并细化 `module_01`、`module_03` 的平台层次与刷怪布局 | 无 | 下一个负责玩家状态机、击退、主线战斗或继续扩图的人 |
-| Copilot CLI（GPT-5.4） | ` copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 参数整理、调参文档、员工文档、进度盘点、地图仓库 | 进行中 | 已完成基础参数归档、员工登记表建立与 resume 对应、8 张白盒地图 + `testcpp1` 主线接线、地图分工表；已细化 `spawn_village` / `random_event_01`，并修复 `module_02` 入口卡墙与 `module_01` 边界破损，用户已确认第二张图恢复正常 | 无 | 下一位接手剩余地图细化、整线跑图验证或继续补文档的 Copilot |
+| Copilot CLI（GPT-5.4） | `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 玩家沙盒、敌人沙盒、MapDrawer 渲染、参数同步、主线 Player 接入、`module_01 / module_03` 地图细化、主菜单 / 存档最小闭环 | 已完成 | 已完成玩家攻击/法术/HUD/`YOU DEAD` 死亡演出接入主线 `Player.cpp`，改成 `W/S` + `J/K` 组合键映射，并细化 `module_01`、`module_03`；现已补完 `NEW GAME` / `CONTINUE` / 最小存档闭环，主线可保存地图、出生点、HP、Soul、HKD，并在死亡后按当前存档点恢复 | 无 | 下一个负责玩家状态机、击退、主线战斗、固定存档点或继续扩图的人 |
+| Copilot CLI（GPT-5.4） | ` copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 参数整理、调参文档、员工文档、进度盘点、地图仓库、`NpcSystem` 最小交互、主界面 HUD 精简 | 进行中 | 已完成基础参数归档、员工登记表建立与 resume 对应、8 张白盒地图 + `testcpp1` 主线接线、地图分工表；已细化 `spawn_village` / `random_event_01`，修复 `module_02` 入口卡墙与 `module_01` 边界破损；已落地 `NpcSystem` 最小交互模块，并把主界面改成顶部极简 HUD + 底部常驻操作说明，现已把 `NpcSystem` 正式接进 `main.cpp` 运行时，支持 `E` 交互 / `W/S` 选项 / `J` 购买，并补齐 `Makefile` / `run.bat` 构建项 | 待继续做整线跑图验证，确认各 NPC / 门 / 存档点在真实流程里都稳定 | 下一位接手整线跑图验证、UI 微调或继续补文档的 Copilot |
 
 ---
 
@@ -32,11 +32,17 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-04-21 | Copilot CLI（GPT-5.4） | 地图系统文档 / Staff 文档 | 已完成 | 补充世界布局地基文档，新增 staff 工作登记表格模板 | 后续接手地图系统接线或继续扩图的 Copilot | 当前只定结构，不提前细画地图 |
 | 2026-04-21 | Copilot CLI（GPT-5.4） | 白盒地图 / 主程序接线 / Staff 分工 | 已完成 | 落地 8 张白盒地图并接入 `testcpp1`，补充 4 个 AI 的地图分工表 | 各地图负责 AI 按分工逐张细化 | 当前阶段主任务就是按房间逐张刻画 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 并行任务 B 认领 | 进行中 | 已认领 Boss 原型 / 敌人扩展 / 战斗结算层最小化；本轮职责锁定在 `Enemy.*` 与 `CombatSystem.*` | 后续由本会话继续补 Boss 原型与最小战斗结算接口 | 暂不触碰 `src\core\main.cpp`、存档和 NPC 文件 |
 | 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | `module_02` / `module_04` 地图细化 | 已完成 | 把两张战斗图改成更适合当前跳跃与战斗的多层白盒，补到 5 只敌人并保留充足走位空间 | 下一位接手主程序跑图验证或继续补战斗结算的 Copilot | 重点满足“可跳、怪适中、结构更复杂、空间不卡手” |
 | 2026-04-21 | Copilot CLI（GPT-5.4） 待填写（当前会话 resume 退出后补） | `module_05` / `boss_room_01` 地图细化 | 已完成 | 已细化 Boss 前通道与 Boss 房平台层次，补充多只地面怪 / 飞行怪站位，并校正行宽与落点可用性 | 下一位接手主程序跑图验证或继续补 Boss 正式内容的 Copilot | 当前版本仍是白盒，但已满足可跳、可战斗、结构更复杂的要求 |
 | 2026-04-21 | Copilot CLI（GPT-5.4） | `spawn_village` / `random_event_01` 细化 | 已完成 | 把出生村改回纯安全区并保留多层 NPC 动线；把事件房改成可上下折返的多层事件战斗房，并补上适中偏多的地面怪 / 飞行怪 | 其他地图负责 AI 继续按同标准细化各自两张图 | 重点保证平台可跳、空间不挤、结构比首版白盒更像《空洞骑士》 |
 | 2026-04-21 | Copilot CLI（GPT-5.4） | Staff / 计划同步 | 已完成 | 更新当前会话档案，补记 `spawn_village` / `random_event_01` 已细化完成，并记录 active map 行宽与 transition 已重新校验通过 | 下一位接手整线流程验证或继续补剩余地图细化的 Copilot | 该文员位当前重点从“建仓”转为“进度同步 + 地图交接” |
 | 2026-04-21 | Copilot CLI（GPT-5.4） | 第二张图卡住修复记录 | 已完成 | 定位到 `module_02` 入口出生点刷进墙体、`module_01` 边界破损和坏刷点；修正后 active map 再校验通过，用户确认第二张图已恢复正常 | 下一位接手整线跑图验证或继续查后续房间落点问题的 Copilot | 说明问题来自地图数据，不是主循环逻辑卡死 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | NPC / 医生 / 商人 / 商店最小交互 | 已完成 | 已完成 `include\\npc\\NpcSystem.h` 重构与 `src\\npc\\NpcSystem.cpp` 新建，并已把结果正式接进 `src\\core\\main.cpp`；现在靠近 NPC 时 `E` 可触发真实交互，商店支持 `W/S` 选商品、`J` 购买、`E` 关闭，并同步补齐 `Makefile` / `run.bat` 的 `NpcSystem` 构建项 | 下一位接手整线跑图验证或继续做商店 / 事件正式逻辑的 Copilot | 本轮已不再停留在提示文案，运行时交互与存档同步都已接上 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | NPC 运行时接线修复 | 已完成 | 修复底部出现 `Press E` 但按下后没有真实效果的问题；主程序现已接入医生回血、村长对话、商人开店与购买结果，并在交互后同步当前存档数据 | 下一位接手整线跑图验证或继续补交互 UI 的 Copilot | 额外补齐 `Makefile` / `run.bat`，避免后续重新编译时漏链 `src\\npc\\NpcSystem.cpp` |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | 紧急任务 2：主界面 HUD 精简 | 已完成 | 只在允许范围内调整 `Player` HUD 与 `main.cpp` 的拼接，把顶部显示收缩到灵魂 / 血量 / HKD / 地点，并去掉大段教学与调试信息 | 下一位接手继续做整线跑图验证或 UI 微调的 Copilot | 本轮未改敌人、存档和 NPC 模块逻辑 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | HUD 交互提示回补 | 已完成 | 在底部恢复常驻基础操作说明，并让靠近门 / NPC 时追加显示 `Press E` 交互提示 | 下一位接手继续做 UI 微调或整线跑图验证的 Copilot | 保持顶部 HUD 简洁，不回退到旧调试屏 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 并行任务 A：主菜单 / 存档最小闭环 | 已完成 | 接通 `GameSession` / `SaveSystem` / `main.cpp`，让标题页按真实存档显示 `CONTINUE`，新游戏会落盘，切图自动存档，死亡后按当前存档点恢复 HP / Soul / HKD / 地图与出生点，并补齐 `Makefile` / `run.bat` 构建项 | 下一位接手固定存档点、难度选择或更完整的流程 UI 的 Copilot | 已用最小存档烟测确认存读与死亡恢复链路可用 |
 
 ---
 
@@ -49,6 +55,35 @@
 1. 继续把剩余白盒房间按同标准细化：平台可跳、敌人适中、门洞与动线清晰
 2. 用 `testcpp1` 做一遍从 `spawn_village` 到 `boss_room_01` 的整线跑图验证
 3. 主流程稳定后，再补捷径门状态、事件房和商店房的正式逻辑
+
+---
+
+## 当前开发纵览
+
+现在项目已经不再是“散乱原型”阶段，**核心主链其实已经收得比较拢了**。
+
+当前已基本成型的部分：
+
+1. 地图仓库、地图加载、主程序地图驱动流程
+2. 玩家移动 / 跳跃 / 普攻 / 法术 / 回血 / 死亡表现
+3. 地面敌人 / 飞行敌人 / 击杀 +10 HKD / 基础 HUD
+4. 8 张主线白盒地图与切图流程
+5. 标题界面、`NEW GAME` / `CONTINUE` 与最小存档闭环
+
+因此，**离一个可交付 demo 剩下的内容已经不算多了**。当前真正还缺、且直接影响 demo 完整度的核心块，主要只剩：
+
+1. 两扇快捷捷径门：先锁、绕远、另一侧解锁、之后双向通行
+2. HUD 精简与 soul 单格重绘修复
+3. `NpcSystem` 正式接入主流程，让村长 / 医生 / 商人真正可交互
+4. 商店最小消费闭环，让 HKD 真正有用途
+5. Boss 原型与 `boss_room_01` 的正式战斗闭环
+6. 全流程再跑一遍，清掉整线卡点、切图和落点问题
+
+结论：
+
+- **当前更像“收尾 + 接线 + 打磨”阶段**，不是大面积新开荒阶段
+- 接下来优先级不该再分散，而应围绕“把现有主链闭合成 demo”推进
+- 当前 demo 完成度可按 **约 70%** 理解；若上述 6 项补齐，项目就会从“能玩的原型”进入“成型 demo”
 
 ---
 
@@ -169,6 +204,132 @@
 
 ---
 
+## 当前紧急插单任务（继续并行、禁止抢文件）
+
+这 3 个问题优先级高于一般扩展内容，**直接影响当前主线可玩性**。  
+要求：仍然按模块拆开做，不允许多人同时改同一组核心文件。
+
+### 紧急任务 1：快捷捷径门改成“先锁、绕路、另一侧解锁、之后双向通行”
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e`
+
+**目标**
+
+- 把 `module_03 <-> spawn_village`、`module_05 <-> spawn_village` 两组捷径门改成真正的单向解锁门
+- 初始状态：出生村侧不可用
+- 玩家从远路绕到另一侧后，可在门前交互解锁
+- 解锁后该门永久双向可用，并写入存档
+
+**只负责这些文件**
+
+- `src\core\main.cpp`
+- `include\save\SaveSystem.h`
+- `src\save\SaveSystem.cpp`
+- `include\core\GameSession.h`
+- `src\core\GameSession.cpp`
+
+**如确实需要再改**
+
+- `data\maps\spawn_village.map`
+- `data\maps\module_03.map`
+- `data\maps\module_05.map`
+
+**本轮交付**
+
+- 两扇捷径门都有锁定 / 解锁状态
+- 解锁前出生村侧不能直接通行
+- 解锁动作必须从远侧触发
+- 解锁后退出再进游戏仍保持开启
+
+**禁止触碰**
+
+- `src\player\Player.cpp`
+- `include\player\Player.h`
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+
+### 紧急任务 2：主界面 HUD 精简
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb`
+
+**目标**
+
+- 把当前主程序顶部信息压缩成极简 HUD
+- 只保留：
+  - 灵魂
+  - 血量
+  - HKD
+  - 地点
+- 去掉当前过多的动作提示、调试提示、冗余说明
+
+**只负责这些文件**
+
+- `src\player\Player.cpp`
+- `include\player\Player.h`
+
+**如确实需要再改**
+
+- `src\core\main.cpp` 中 HUD 拼接相关的极小范围代码，但必须只改显示拼接，不动主流程逻辑
+
+**本轮交付**
+
+- 进入游戏后顶部 HUD 明显更简洁
+- 不再出现一长串教学/调试信息挤占画面
+- 地点名必须可见
+
+**禁止触碰**
+
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- `include\save\SaveSystem.h`
+- `src\save\SaveSystem.cpp`
+- `include\npc\NpcSystem.h`
+- `src\npc\NpcSystem.cpp`
+
+### 紧急任务 3：Soul 单个容器重绘修复
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af`
+
+**目标**
+
+- 修复 soul 容器单个重绘异常
+- 保证容器在主程序 HUD 里不会出现单格错位、覆盖、残影或状态显示不准
+- 只做最小修复，不顺手扩成大规模 HUD 重构
+
+**只负责这些文件**
+
+- `src\player\Player.cpp`
+- 如确实需要再改：`src\world\MapDrawer.cpp`
+
+**本轮交付**
+
+- 单个 soul 容器显示稳定
+- 切图、受伤、回血、施法后重绘不乱
+- 不破坏现有 HP / HKD / 地点显示
+
+**禁止触碰**
+
+- `src\core\main.cpp`
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- `include\npc\NpcSystem.h`
+- `src\npc\NpcSystem.cpp`
+
+说明：
+
+- 任务 2 和任务 3 都会碰 `Player.cpp`，因此**必须顺序执行**：
+  1. 先由任务 2 完成 HUD 精简并提交
+  2. 再由任务 3 基于最新版本只修 soul 单格重绘
+- 任务 1 可与任务 2 / 3 完全并行
+
+---
+
 ## 当前地图分工（4 个 AI / 8 张图）
 
 | Copilot / Resume | 分配地图 | 负责重点 | 交付要求 |
@@ -242,12 +403,15 @@
 - Sandbox 体系接入与维护
 - 地面普通敌人原型与 EnemySandbox 接线
 - 飞行敌人简化原型与调参文档同步
+- Boss 原型 / 敌人扩展 / `CombatSystem` 最小化
 
 **工作目标**
 
 - 把当前控制台原型整理成可维护的模块结构
 - 提供稳定的沙盒调试入口，方便单独测试玩家 / 技能 / 敌人
 - 先做出“能玩、能调、能继续接”的普通敌人原型
+- 给 `boss_room_01` 补上最小可验证的 Boss 战斗目标
+- 把敌人 / Boss 的伤害与奖励结算从临时逻辑继续往 `CombatSystem` 收口
 
 **当前状态**
 
@@ -271,20 +435,23 @@
 
 **进行中**
 
-- 继续把“沙盒原型”往“正式模块接入”推进
+- 已认领并行任务 B：Boss 原型 / 敌人扩展 / 战斗结算层最小化
+- 接下来在 `include\enemy\Enemy.h`、`src\enemy\Enemy.cpp`、`include\combat\CombatSystem.h`、`src\combat\CombatSystem.cpp` 内补最小可接入版本
 - 保持参数文档和当前实装行为一致
-- 等待 `PlayerSandbox` 另一位 AI 的改动稳定后，再继续 Combat reward 中间层重构
 
 **待处理**
 
+- Boss 原型：血量、受击、死亡、至少 1~2 个攻击与基础节奏
+- `CombatSystem` 最小化：统一敌人 / Boss 的伤害、击杀奖励和后续可接线接口
 - 地面 / 飞行敌人的正式掉落、统一奖励结算、血条 UI
 - 玩家正式攻击判定、受伤击退、无敌帧与敌人系统接通
 - EnemySandbox 补成更完整的调试场
 
 **阻塞 / 风险**
 
-- 玩家正式战斗链路还没接好，所以很多敌人行为目前仍以沙盒验证为主
-- `PlayerSandbox` 正在被另一位 AI 改动，所以 Combat reward 中间层暂未开重构
+- 本轮按 staff 要求不能改 `src\core\main.cpp`，所以 Boss 刷入和主流程正式接线需要主流程位后续配合
+- 玩家正式战斗链路还没完全接好，所以很多敌人 / Boss 行为仍需先在敌人模块和最小结算层内自洽
+- `CombatSystem` 这次先做最小闭环，不在这一轮提前扩成完整大系统
 
 **需要同步的参数 / 规则**
 
@@ -293,10 +460,12 @@
 - 飞行敌人当前参数包括：血量 2、索敌 12、脱战 18、预警 0.30 秒、恢复 0.80 秒、悬停范围 2、移动步进 0.24 秒、火球伤害 1、击杀奖励 10 HKD
 - 当前击杀地面敌人后，玩家头顶会短暂显示 `+10` 飘字
 - `module_02`、`module_04` 当前按战斗白盒思路细化：平台必须可跳、敌人数量适中偏多、结构更接近《空洞骑士》式多层空间
+- 并行任务 B 当前只允许动 `Enemy.*` 与 `CombatSystem.*`，不直接改 `main.cpp` / 存档 / NPC 侧文件
 
 **交接说明**
 
-- 如果下一位要继续做敌人，优先做地面 / 飞行敌人的统一掉落、奖励发放和主线战斗结算
+- 如果下一位要接主流程，请先给 Boss 刷入 `boss_room_01` 和 `CombatSystem` 调用预留 hook，再接正式战斗入口
+- 如果下一位要继续做敌人，就优先补 Boss 原型的完整攻击节奏、统一掉落、奖励发放和主线战斗结算
 - 如果下一位要先做玩家战斗，就优先把玩家攻击、受伤、无敌帧与主程序 / EnemySandbox / 敌人模块彻底打通，并把临时写在 Player 里的击杀奖励逻辑迁到中间结算层
 - 文档更新时，优先同步 `docs/game_design.md`、`docs/parameter_tuning.md`、`docs/module_checklist.md`
 
@@ -319,6 +488,9 @@
 - `docs/copilot_staff.md` 员工文档建立与补录
 - 项目当前完成度、sandbox 存在性、模块缺口盘点
 - 地图仓库目录、索引与示例地图接入
+- `include\npc\NpcSystem.h` / `src\npc\NpcSystem.cpp`
+- 出生村 NPC / 医生 / 商人 / 商店最小交互
+- `src\player\Player.cpp` / `include\player\Player.h` 主界面 HUD 精简
 
 **工作目标**
 
@@ -349,11 +521,19 @@
 - 已细化 `spawn_village` 与 `random_event_01`，其中 `spawn_village` 保持无敌人的安全区，`random_event_01` 补上可跳平台、适中偏多的敌人和更明确的事件点位
 - 已校正 `spawn_village` 与 `module_03` 的 active map 行宽问题，当前 active map 集合 transition / spawn 校验已通过
 - 已修正 `module_02` 入口出生点刷进墙体、坏刷点和 `module_01` 边界破损；用户已确认第二张图恢复正常
+- 已重构 `include\npc\NpcSystem.h` 并新建 `src\npc\NpcSystem.cpp`
+- 已把村长主线提示、医生回满血、商店报价与购买结果收进 `NpcSystem`
+- 已同步 `docs\game_design.md` 与 `docs\parameter_tuning.md` 的 NPC / 商店最小闭环规则
+- 已按紧急任务 2 精简主界面 HUD，主程序顶部只保留灵魂、血量、HKD 和地点
+- 已把 `NpcSystem` 正式接进 `src\core\main.cpp` 运行时，`E` 可触发真实 NPC 交互
+- 已补上商店内 `W/S` 选项、`J` 购买、`E` 关闭，并在交互后同步存档侧数据
+- 已补齐 `Makefile` / `run.bat` 的 `src\npc\NpcSystem.cpp` 构建项，避免主程序重新编译时断链
 
 **进行中**
 
 - 继续同步 staff、计划和地图交接状态
 - 等待其他地图负责 AI 的细化结果，便于统一收口和总盘点
+- 后续补一轮 `testcpp1` 的整线跑图记录，重点确认出生村 NPC 交互在真实流程里稳定
 
 **待处理**
 
@@ -362,6 +542,7 @@
 - 后续补一轮 `testcpp1` 的整线跑图记录
 - 后续根据主流程验证结果，继续维护 staff 分工和地图交接说明
 - 后续继续排查其余房间是否还有刷点压墙或边界破损的同类问题
+- 如有需要，再对极简 HUD 做轻量排版微调，但不回退到旧调试屏
 
 **阻塞 / 风险**
 
@@ -372,6 +553,7 @@
 - 当前基础调参以 `docs/parameter_tuning.md` 为准
 - Copilot 分工与交接以 `docs/copilot_staff.md` 为准
 - 地图文件仓库当前位于 `data\maps`
+- NPC / 商店最小闭环规则当前以 `include\npc\NpcSystem.h`、`src\npc\NpcSystem.cpp` 和相关文档为准
 
 **交接说明**
 
@@ -379,6 +561,7 @@
 - 如果继续整理多人协作记录，优先维护 `docs/copilot_staff.md`
 - 如果继续做地图系统，优先从 `include\world\WorldSystem.h`、`src\world\WorldSystem.cpp`、`data\maps` 开始
 - 当前这位现在除“文员位 + 地图仓库搭建”外，也负责地图总盘点、分工下发、主线白盒推进对齐和地图细化进度同步
+- 本轮 `NpcSystem` 已正式接进主程序；后续主要是整线验证和交互 UI 微调，不再是“只做模块、不接主线”
 
 **最后更新**
 

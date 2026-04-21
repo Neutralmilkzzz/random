@@ -6,8 +6,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "core/GameSession.h"
 #include "enemy/Enemy.h"
 #include "input/KeyStateManager.h"
+#include "npc/NpcSystem.h"
 #include "player/Player.h"
 #include "save/SaveSystem.h"
 #include "world/MapDrawer.h"
@@ -21,6 +23,7 @@ const int kTitleScreenHeight = 24;
 const int kTitleUnavailableHintFrames = 90;
 const int kTitleStartTransitionFrames = 24;
 const int kFlyingProjectileStepFrames = 3;
+const char* kDefaultRuntimePrompt = "Move with A/D and SPACE. Press E near doors or NPCs.";
 
 struct EnemyProjectile {
     game::Position position;
@@ -50,14 +53,18 @@ struct RuntimeState {
     std::string lastInteraction;
     std::string prompt;
     bool shopOpen;
+    std::string shopNpcId;
+    std::vector<game::ShopOffer> shopOffers;
+    int shopSelection;
     std::unordered_map<int, bool> previousKeys;
 
     RuntimeState()
         : currentMapId("spawn_village"),
           currentSpawnPointId("player_start"),
           lastInteraction("Main world ready."),
-          prompt("Move with A/D and SPACE. Press E near doors or NPCs."),
-          shopOpen(false) {
+          prompt(kDefaultRuntimePrompt),
+          shopOpen(false),
+          shopSelection(0) {
     }
 };
 
@@ -70,6 +77,12 @@ enum class TitleScreenState {
     TitleScreen,
     ContinueUnavailable,
     StartTransition
+};
+
+enum class TitleScreenResult {
+    Exit,
+    NewGame,
+    ContinueGame
 };
 
 size_t lineWidth(const std::string& map) {
@@ -178,7 +191,8 @@ void placeTitleParticle(std::vector<std::string>& lines, int row, int col, char 
 
 std::string buildTitleScreenMap(TitleMenuSelection selection,
                                 TitleScreenState state,
-                                int animationFrame) {
+                                int animationFrame,
+                                bool hasSaveData) {
     std::vector<std::string> lines = createTitleCanvas();
 
     const char particleA = (animationFrame / 24) % 3 == 1 ? '\'' : '.';
@@ -200,9 +214,10 @@ std::string buildTitleScreenMap(TitleMenuSelection selection,
     const std::string newGameLine = selection == TitleMenuSelection::NewGame
             ? (((animationFrame / 20) % 2 == 0) ? "> NEW GAME" : ">> NEW GAME")
             : "  NEW GAME";
+    const std::string continueLabel = hasSaveData ? "CONTINUE" : "CONTINUE (NO SAVE)";
     const std::string continueLine = selection == TitleMenuSelection::ContinueGame
-            ? (((animationFrame / 20) % 2 == 0) ? "> CONTINUE (NO SAVE)" : ">> CONTINUE (NO SAVE)")
-            : "  CONTINUE (NO SAVE)";
+            ? (((animationFrame / 20) % 2 == 0) ? "> " + continueLabel : ">> " + continueLabel)
+            : "  " + continueLabel;
 
     placeCenteredLine(lines, 14, newGameLine);
     placeCenteredLine(lines, 15, continueLine);
@@ -226,29 +241,32 @@ std::string buildTitleScreenMap(TitleMenuSelection selection,
     return frame.str();
 }
 
-bool runTitleScreen(MapDrawer& mapDrawer, KeyStateManager& keyStateManager) {
+TitleScreenResult runTitleScreen(MapDrawer& mapDrawer,
+                                 KeyStateManager& keyStateManager,
+                                 bool hasSaveData) {
     TitleMenuSelection selection = TitleMenuSelection::NewGame;
     TitleScreenState state = TitleScreenState::TitleScreen;
     int stateFrames = 0;
     int animationFrame = 0;
     std::unordered_map<int, bool> previousKeys;
-    const bool hasSaveData = false;
 
     while (true) {
         keyStateManager.clearKeys();
         keyStateManager.readKeys();
 
         if (isKeyDown(keyStateManager, 0x1B)) {
-            return false;
+            return TitleScreenResult::Exit;
         }
 
         if (state == TitleScreenState::StartTransition) {
             stateFrames++;
-            mapDrawer.currentmap = buildTitleScreenMap(selection, state, animationFrame++);
+            mapDrawer.currentmap = buildTitleScreenMap(selection, state, animationFrame++, hasSaveData);
             mapDrawer.draw();
             previousKeys = keyStateManager.keyStates;
             if (stateFrames >= kTitleStartTransitionFrames) {
-                return true;
+                return selection == TitleMenuSelection::NewGame
+                        ? TitleScreenResult::NewGame
+                        : TitleScreenResult::ContinueGame;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
             continue;
@@ -287,7 +305,7 @@ bool runTitleScreen(MapDrawer& mapDrawer, KeyStateManager& keyStateManager) {
             }
         }
 
-        mapDrawer.currentmap = buildTitleScreenMap(selection, state, animationFrame++);
+        mapDrawer.currentmap = buildTitleScreenMap(selection, state, animationFrame++, hasSaveData);
         mapDrawer.draw();
         previousKeys = keyStateManager.keyStates;
         std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
@@ -329,7 +347,7 @@ RuntimeNpcInfo getNpcInfo(const std::string& npcId) {
         npc.displayName = "Chief";
         npc.glyph = 'L';
         npc.opensShop = false;
-        npc.interactionText = "村长正在等待后续对白接线。";
+        npc.interactionText = "Head right and clear the next rooms. The upper shortcut opens later.";
         return npc;
     }
 
@@ -338,7 +356,7 @@ RuntimeNpcInfo getNpcInfo(const std::string& npcId) {
         npc.displayName = "Doctor";
         npc.glyph = 'D';
         npc.opensShop = false;
-        npc.interactionText = "医生位置已经接入，后续可补对话和治疗。";
+        npc.interactionText = "Doctor hook is ready. Full-heal behavior will be wired here.";
         return npc;
     }
 
@@ -347,7 +365,7 @@ RuntimeNpcInfo getNpcInfo(const std::string& npcId) {
         npc.displayName = "Merchant";
         npc.glyph = 'M';
         npc.opensShop = false;
-        npc.interactionText = "商店逻辑待补，现在先保留站位，不再打开占位面板。";
+        npc.interactionText = "Merchant hook is ready. Shop UI is not wired into main yet.";
         return npc;
     }
 
@@ -356,7 +374,7 @@ RuntimeNpcInfo getNpcInfo(const std::string& npcId) {
         npc.displayName = "Event Marker";
         npc.glyph = '?';
         npc.opensShop = false;
-        npc.interactionText = "事件逻辑待补，现在这里只是预留位。";
+        npc.interactionText = "Event hook placeholder.";
         return npc;
     }
 
@@ -364,7 +382,7 @@ RuntimeNpcInfo getNpcInfo(const std::string& npcId) {
     npc.displayName = "NPC";
     npc.glyph = 'N';
     npc.opensShop = false;
-    npc.interactionText = "NPC 占位。";
+    npc.interactionText = "NPC placeholder.";
     return npc;
 }
 
@@ -419,6 +437,20 @@ void loadMapState(const game::MapDefinition& mapDefinition,
     state.currentMapId = mapDefinition.id;
     state.currentSpawnPointId = spawnPointId;
     state.shopOpen = false;
+    state.shopNpcId.clear();
+    state.shopOffers.clear();
+    state.shopSelection = 0;
+}
+
+void syncSaveDataWithRuntime(const Player& player,
+                             const RuntimeState& state,
+                             const game::GameSession& session,
+                             game::SaveData& saveData) {
+    saveData.playerStats = player.getStats();
+    saveData.currentMapId = state.currentMapId;
+    saveData.respawnMapId = state.currentSpawnPointId;
+    saveData.completionTimeSeconds = session.getRunStatistics().totalPlaySeconds;
+    saveData.hasActiveRun = true;
 }
 
 std::string buildCollisionMap(const std::string& terrainMap,
@@ -531,6 +563,11 @@ const game::MapTransition* findInteractableTransition(const game::MapDefinition&
 void updatePrompt(const game::MapDefinition& mapDefinition,
                   const game::Position& playerPosition,
                   RuntimeState& state) {
+    if (state.shopOpen) {
+        state.prompt = "Shop open. W/S select, J buy, E close.";
+        return;
+    }
+
     const game::NpcPlacement* npcPlacement = findInteractableNpc(mapDefinition, playerPosition);
     if (npcPlacement != 0) {
         const RuntimeNpcInfo npcInfo = getNpcInfo(npcPlacement->npcId);
@@ -544,7 +581,67 @@ void updatePrompt(const game::MapDefinition& mapDefinition,
         return;
     }
 
-    state.prompt = "Move with A/D and SPACE. Press E near doors or NPCs.";
+    state.prompt = kDefaultRuntimePrompt;
+}
+
+std::string buildBottomFooter(const RuntimeState& state) {
+    std::ostringstream footer;
+    footer << "\n";
+    footer << "A/D Move  SPACE Jump  W/S Aim  J Attack  K Spell  R Heal  P Reset  ESC Exit";
+    if (state.prompt != kDefaultRuntimePrompt) {
+        footer << "\n" << state.prompt;
+    }
+    if (!state.lastInteraction.empty()) {
+        footer << "\n" << state.lastInteraction;
+    }
+    if (state.shopOpen) {
+        for (size_t index = 0; index < state.shopOffers.size(); ++index) {
+            footer << "\n"
+                   << (static_cast<int>(index) == state.shopSelection ? "> " : "  ")
+                   << state.shopOffers[index].name
+                   << " - " << state.shopOffers[index].hkdCost << " HKD";
+        }
+        if (state.shopSelection >= 0 &&
+            state.shopSelection < static_cast<int>(state.shopOffers.size())) {
+            footer << "\n"
+                   << state.shopOffers[static_cast<size_t>(state.shopSelection)].description;
+        }
+    }
+    return footer.str();
+}
+
+void applyNpcInteraction(const std::string& npcId,
+                         Player& player,
+                         RuntimeState& state,
+                         game::SaveData& saveData) {
+    game::CharacterStats stats = player.getStats();
+    const game::NpcInteractionResult result = game::interactWithNpc(npcId, stats);
+    player.restoreSavedStats(stats);
+    saveData.playerStats = stats;
+
+    state.lastInteraction = result.speaker + ": " + result.text;
+    state.shopOpen = result.opensShop;
+    state.shopNpcId = result.opensShop ? npcId : std::string();
+    state.shopOffers = result.offers;
+    state.shopSelection = 0;
+}
+
+void applyShopPurchase(Player& player,
+                       RuntimeState& state,
+                       game::SaveData& saveData) {
+    if (!state.shopOpen ||
+        state.shopSelection < 0 ||
+        state.shopSelection >= static_cast<int>(state.shopOffers.size())) {
+        return;
+    }
+
+    game::CharacterStats stats = player.getStats();
+    const game::ShopOffer& selectedOffer = state.shopOffers[static_cast<size_t>(state.shopSelection)];
+    const game::NpcInteractionResult result =
+            game::purchaseNpcOffer(state.shopNpcId, selectedOffer.id, stats);
+    player.restoreSavedStats(stats);
+    saveData.playerStats = stats;
+    state.lastInteraction = result.speaker + ": " + result.text;
 }
 
 bool canEnemyOccupy(const std::string& terrainMap,
@@ -727,40 +824,14 @@ void removeDefeatedEnemies(std::vector<game::GroundEnemy>& groundEnemies,
     flyingEnemies.swap(livingFlying);
 }
 
-std::string buildWorldStatus(const game::MapDefinition& mapDefinition,
-                             const game::SaveData& saveData,
-                             size_t loadedMapCount,
-                             const RuntimeState& state,
-                             const std::vector<game::GroundEnemy>& groundEnemies,
-                             const std::vector<game::FlyingEnemy>& flyingEnemies,
-                             const std::vector<EnemyProjectile>& enemyProjectiles) {
-    std::ostringstream status;
-    status << "[Main World] ESC exit | P reset room\n";
-    status << "Map " << mapDefinition.displayName
-           << " | Loaded Maps " << loadedMapCount
-           << " | Ground " << groundEnemies.size()
-           << " | Flying " << flyingEnemies.size()
-           << " | Projectiles " << enemyProjectiles.size() << "\n";
-    status << "Save Map " << saveData.currentMapId
-           << " | Respawn " << saveData.respawnMapId
-           << " | Shop " << (state.shopOpen ? "OPEN" : "OFF") << "\n";
-    status << "Prompt: " << state.prompt << "\n";
-    status << "Last Interaction: " << state.lastInteraction << "\n";
-    if (state.shopOpen) {
-        status << "[Merchant Placeholder]\n";
-        status << "- Merchant UI pending\n";
-        status << "- Press E to close\n";
-    }
-    status << "\n";
-    return status.str();
-}
-
 } // namespace
 
 int main() {
     MapDrawer mapDrawer;
     KeyStateManager keyStateManager;
     Player player(keyStateManager);
+    game::GameSession gameSession;
+    game::SaveSystem saveSystem;
     game::MapLoader mapLoader;
     RuntimeState state;
     game::SaveData saveData;
@@ -771,17 +842,30 @@ int main() {
     std::vector<EnemyProjectile> enemyProjectiles;
     game::GroundEnemy dummyGroundEnemy("dummy_ground", game::Position(-100, -100));
     game::FlyingEnemy dummyFlyingEnemy("dummy_flying", game::Position(-100, -100));
-    const size_t loadedMapCount = mapLoader.loadAllMaps().size();
     game::MapDefinition currentMapDefinition;
 
-    if (!runTitleScreen(mapDrawer, keyStateManager)) {
+    const TitleScreenResult titleResult = runTitleScreen(mapDrawer, keyStateManager, saveSystem.hasSave());
+    if (titleResult == TitleScreenResult::Exit) {
         return 0;
     }
 
-    player.resetRuntimeState();
-    currentMapDefinition = mapLoader.loadMap("spawn_village");
+    if (titleResult == TitleScreenResult::ContinueGame) {
+        saveData = saveSystem.load();
+        if (!gameSession.continueRun(saveData)) {
+            return 0;
+        }
+    } else {
+        if (!gameSession.startNewRun(game::Difficulty::Normal)) {
+            return 0;
+        }
+        saveData = gameSession.getActiveSave();
+        saveSystem.saveOnMapEntry(saveData);
+    }
+
+    player.restoreSavedStats(saveData.playerStats);
+    currentMapDefinition = mapLoader.loadMap(saveData.currentMapId.empty() ? "spawn_village" : saveData.currentMapId);
     loadMapState(currentMapDefinition,
-                 "player_start",
+                 saveData.respawnMapId.empty() ? "player_start" : saveData.respawnMapId,
                  state,
                  saveData,
                  terrainMap,
@@ -789,6 +873,9 @@ int main() {
                  groundEnemies,
                  flyingEnemies,
                  enemyProjectiles);
+    syncSaveDataWithRuntime(player, state, gameSession, saveData);
+    gameSession.setActiveSave(saveData);
+    saveSystem.saveOnMapEntry(saveData);
 
     while (true) {
         keyStateManager.clearKeys();
@@ -800,10 +887,10 @@ int main() {
 
         if (isJustPressed(keyStateManager, state.previousKeys, 'p') ||
             isJustPressed(keyStateManager, state.previousKeys, 'P')) {
-            player.resetRuntimeState();
-            currentMapDefinition = mapLoader.loadMap(state.currentMapId);
+            player.restoreSavedStats(saveData.playerStats);
+            currentMapDefinition = mapLoader.loadMap(saveData.currentMapId);
             loadMapState(currentMapDefinition,
-                         state.currentSpawnPointId,
+                         saveData.respawnMapId,
                          state,
                          saveData,
                          terrainMap,
@@ -811,22 +898,51 @@ int main() {
                          groundEnemies,
                          flyingEnemies,
                          enemyProjectiles);
-            state.lastInteraction = "Room reset.";
+            state.lastInteraction = "Room reset to current save.";
         }
 
         updatePrompt(currentMapDefinition, playerPosition, state);
+
+        if (state.shopOpen && !state.shopOffers.empty()) {
+            if (isJustPressed(keyStateManager, state.previousKeys, 'w') ||
+                isJustPressed(keyStateManager, state.previousKeys, 'W')) {
+                state.shopSelection--;
+                if (state.shopSelection < 0) {
+                    state.shopSelection = static_cast<int>(state.shopOffers.size()) - 1;
+                }
+            } else if (isJustPressed(keyStateManager, state.previousKeys, 's') ||
+                       isJustPressed(keyStateManager, state.previousKeys, 'S')) {
+                state.shopSelection++;
+                if (state.shopSelection >= static_cast<int>(state.shopOffers.size())) {
+                    state.shopSelection = 0;
+                }
+            }
+        }
+
+        if (state.shopOpen &&
+            (isJustPressed(keyStateManager, state.previousKeys, 'j') ||
+             isJustPressed(keyStateManager, state.previousKeys, 'J'))) {
+            applyShopPurchase(player, state, saveData);
+            syncSaveDataWithRuntime(player, state, gameSession, saveData);
+            gameSession.setActiveSave(saveData);
+            saveSystem.saveOnMapEntry(saveData);
+        }
 
         if (isJustPressed(keyStateManager, state.previousKeys, 'e') ||
             isJustPressed(keyStateManager, state.previousKeys, 'E')) {
             if (state.shopOpen) {
                 state.shopOpen = false;
+                state.shopNpcId.clear();
+                state.shopOffers.clear();
+                state.shopSelection = 0;
                 state.lastInteraction = "Closed interaction panel.";
             } else {
                 const game::NpcPlacement* npcPlacement = findInteractableNpc(currentMapDefinition, playerPosition);
                 if (npcPlacement != 0) {
-                    const RuntimeNpcInfo npcInfo = getNpcInfo(npcPlacement->npcId);
-                    state.lastInteraction = npcInfo.displayName + ": " + npcInfo.interactionText;
-                    state.shopOpen = npcInfo.opensShop;
+                    applyNpcInteraction(npcPlacement->npcId, player, state, saveData);
+                    syncSaveDataWithRuntime(player, state, gameSession, saveData);
+                    gameSession.setActiveSave(saveData);
+                    saveSystem.saveOnMapEntry(saveData);
                 } else {
                     const game::MapTransition* transition = findInteractableTransition(currentMapDefinition, playerPosition);
                     if (transition != 0) {
@@ -840,6 +956,9 @@ int main() {
                                      groundEnemies,
                                      flyingEnemies,
                                      enemyProjectiles);
+                        syncSaveDataWithRuntime(player, state, gameSession, saveData);
+                        gameSession.setActiveSave(saveData);
+                        saveSystem.saveOnMapEntry(saveData);
                         state.lastInteraction = "Entered " + currentMapDefinition.displayName + ".";
                     }
                 }
@@ -932,6 +1051,9 @@ int main() {
 
         updateEnemyProjectiles(terrainMap, playerPosition, enemyProjectiles, player);
         removeDefeatedEnemies(groundEnemies, flyingEnemies);
+        gameSession.update(static_cast<float>(kFrameMs) / 1000.0f);
+        syncSaveDataWithRuntime(player, state, gameSession, saveData);
+        gameSession.setActiveSave(saveData);
 
         std::string renderMap = buildRenderMap(terrainMap,
                                                playerPosition,
@@ -940,22 +1062,19 @@ int main() {
                                                flyingEnemies,
                                                enemyProjectiles);
         player.overlayRender(renderMap, gameplayMap);
-        mapDrawer.currentmap = player.buildHud() +
-                               buildWorldStatus(currentMapDefinition,
-                                                saveData,
-                                                loadedMapCount,
-                                                state,
-                                                groundEnemies,
-                                                flyingEnemies,
-                                                enemyProjectiles) +
-                               renderMap;
+        mapDrawer.currentmap = player.buildHud(currentMapDefinition.displayName) +
+                               renderMap +
+                               buildBottomFooter(state);
         mapDrawer.draw();
 
         if (player.consumeResetRequest()) {
-            player.resetRuntimeState();
-            currentMapDefinition = mapLoader.loadMap(state.currentMapId);
+            gameSession.markPlayerDead();
+            saveData = saveSystem.restoreAfterDeath(gameSession.getActiveSave());
+            gameSession.setActiveSave(saveData);
+            player.restoreSavedStats(saveData.playerStats);
+            currentMapDefinition = mapLoader.loadMap(saveData.currentMapId);
             loadMapState(currentMapDefinition,
-                         state.currentSpawnPointId,
+                         saveData.respawnMapId,
                          state,
                          saveData,
                          terrainMap,
@@ -963,7 +1082,7 @@ int main() {
                          groundEnemies,
                          flyingEnemies,
                          enemyProjectiles);
-            state.lastInteraction = "Respawned in current room.";
+            state.lastInteraction = "Respawned at current save point.";
         }
 
         state.previousKeys = keyStateManager.keyStates;

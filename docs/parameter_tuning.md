@@ -51,6 +51,24 @@
 - 灵魂可用于施放伤害性法术，也可用于治疗。
 - 灵魂在 HUD 上以圆形仪表盘显示。
 
+## 5.1 NPC / 商店参数
+
+| 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| npc_chief | 主线提示 | village_chief_hint_count | 1 | 句 | 村长当前至少提供 1 句主线推进提示 |
+| npc_doctor | 治疗 | doctor_full_heal_cost | 0 | HKD | 医生当前免费把生命回满 |
+| npc_merchant | 商品 | merchant_vital_shell_cost | 40 | HKD | `Vital Shell` 价格，生命上限 +1 |
+| npc_merchant | 商品 | merchant_vital_shell_max_purchases | 2 | 次 | 生命强化当前最多购买 2 次 |
+| npc_merchant | 商品 | merchant_nail_edge_cost | 55 | HKD | `Nail Edge` 价格，攻击等级 +1 |
+| npc_merchant | 商品 | merchant_nail_edge_max_purchases | 2 | 次 | 攻击强化当前最多购买 2 次 |
+| npc_merchant | 商品 | merchant_shadow_dash_token_cost | 90 | HKD | `Shadow Dash Token` 价格，影冲能力预留 |
+
+## 5.2 NPC / 商店附带规则
+
+- 医生交互后直接把当前生命补到上限，不做额外前摇。
+- 商店当前先做最小闭环：返回商品列表、购买结果和 HKD 扣费。
+- `Shadow Dash Token` 当前只返回“已授予影冲解锁标记”的结果，真正技能解锁与存档持久化仍需主流程接线。
+
 ## 6. 凝聚回血参数
 
 | 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
@@ -145,3 +163,33 @@
 - 普通敌人受伤反馈统一按 `g/f -> * -> g/f` 处理，整体保持很短，不做拖沓动画。
 - 普通敌人死亡反馈统一按 `g/f -> * -> x -> 空` 处理，2 到 3 个视觉阶段后立即消失。
 - 当前阶段先**不做敌人血条**，优先保证受击和死亡反馈足够短、清楚、利落。
+
+## 16. Boss 原型框架参数（当前仅用于 BossSandbox）
+
+| 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| boss_common | 硬直窗口 | boss_stagger_window_duration | 5.0 | 秒 | Boss 原型共用的累计受伤硬直窗口 |
+| boss_common | 受击反馈 | boss_hit_flash_duration | 0.12 | 秒 | Boss 受伤时短闪 `*` |
+| boss_common | 死亡反馈 | boss_death_flash_duration | 0.10 | 秒 | Boss 死亡第一阶段显示 `*` |
+| boss_common | 死亡反馈 | boss_death_marker_duration | 0.12 | 秒 | Boss 死亡第二阶段显示 `x` |
+| boss_melee | 血量 | boss_melee_health_current | 18 | 血量 | 当前近战 Boss 沙盒原型血量，后续可再调 |
+| boss_melee | 硬直阈值 | boss_melee_stagger_threshold | 7 | 伤害 | 5 秒内累计达到该值时进入硬直 |
+| boss_melee | 前摇 | boss_melee_attack_startup | 0.45 | 秒 | 近战 Boss 常规攻击前摇 |
+| boss_melee | 恢复 | boss_melee_attack_recovery | 0.70 | 秒 | 近战 Boss 攻击后的恢复期 |
+| boss_melee | 硬直 | boss_melee_stagger_duration | 1.10 | 秒 | 当前近战 Boss 原型硬直时长 |
+| boss_melee | 奖励 | boss_melee_hkd_reward | 60 | HKD | 击杀近战 Boss 原型的奖励 |
+| boss_ranged | 血量 | boss_ranged_health_current | 14 | 血量 | 当前远程 Boss 沙盒原型血量，后续可再调 |
+| boss_ranged | 硬直阈值 | boss_ranged_stagger_threshold | 6 | 伤害 | 5 秒内累计达到该值时进入硬直 |
+| boss_ranged | 前摇 | boss_ranged_attack_startup | 0.40 | 秒 | 远程 Boss 常规施法前摇 |
+| boss_ranged | 恢复 | boss_ranged_attack_recovery | 0.75 | 秒 | 远程 Boss 攻击后的恢复期 |
+| boss_ranged | 硬直 | boss_ranged_stagger_duration | 1.20 | 秒 | 当前远程 Boss 原型硬直时长 |
+| boss_ranged | 奖励 | boss_ranged_hkd_reward | 70 | HKD | 击杀远程 Boss 原型的奖励 |
+| boss_sandbox | 陨石预警 | boss_meteor_warning_frames | 18 | 帧 | 陨石打击前的 `^` 预警帧数 |
+| boss_sandbox | 陨石爆发 | boss_meteor_blast_frames | 6 | 帧 | 陨石落点爆发显示时长 |
+
+## 17. Boss 原型附带规则（当前仅用于 BossSandbox）
+
+- 当前 Boss 只先搭框架和测试沙盒，不代表最终 Boss 设计数值已经锁定。
+- 近战 Boss 原型当前包含：苏醒、贴近、横扫、冲刺斩、受击、硬直、死亡。
+- 远程 Boss 原型当前包含：苏醒、拉扯、火球散射、陨石点名、受击、硬直、死亡。
+- `BossSandbox` 当前按 `1/2` 刷两种 Boss，`H/J` 用轻击/重击直接验证伤害、奖励和硬直结算。

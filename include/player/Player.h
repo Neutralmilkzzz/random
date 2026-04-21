@@ -34,9 +34,11 @@ public:
     bool consumeResetRequest();
 
     const game::CharacterStats& getStats() const;
+    void restoreSavedStats(const game::CharacterStats& savedStats);
     game::FacingDirection getFacingDirection() const;
 
     std::string buildHud() const;
+    std::string buildHud(const std::string& locationName) const;
     void overlayRender(std::string& renderMap, const std::string& gameplayMap) const;
 
     bool isGrounded(const std::string& currentmap, size_t pos);

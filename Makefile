@@ -10,6 +10,7 @@ ifeq ($(OS),Windows_NT)
     SKILL_SANDBOX_TARGET = skill_sandbox.exe
     COMBAT_SANDBOX_TARGET = combat_sandbox.exe
     ENEMY_SANDBOX_TARGET = enemy_sandbox.exe
+    BOSS_SANDBOX_TARGET = boss_sandbox.exe
     WORLD_SANDBOX_TARGET = world_sandbox.exe
     MAP_EDITOR_SANDBOX_TARGET = map_editor_sandbox.exe
 else
@@ -18,6 +19,7 @@ else
     SKILL_SANDBOX_TARGET = skill_sandbox
     COMBAT_SANDBOX_TARGET = combat_sandbox
     ENEMY_SANDBOX_TARGET = enemy_sandbox
+    BOSS_SANDBOX_TARGET = boss_sandbox
     WORLD_SANDBOX_TARGET = world_sandbox
     MAP_EDITOR_SANDBOX_TARGET = map_editor_sandbox
 endif
@@ -29,9 +31,13 @@ RUNTIME_SRCS = src/player/Player.cpp \
 
 # 源文件
 SRCS = src/core/main.cpp \
-        src/enemy/Enemy.cpp \
-       src/world/WorldSystem.cpp \
-       $(RUNTIME_SRCS)
+        src/core/GameSession.cpp \
+        src/combat/CombatSystem.cpp \
+         src/enemy/Enemy.cpp \
+        src/npc/NpcSystem.cpp \
+        src/save/SaveSystem.cpp \
+        src/world/WorldSystem.cpp \
+        $(RUNTIME_SRCS)
 
 # 头文件
 HEADERS = include/player/Player.h \
@@ -55,29 +61,32 @@ OBJS = $(SRCS:.cpp=.o)
 all: $(TARGET)
 
 # 沙盒集合
-sandboxes: $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) $(MAP_EDITOR_SANDBOX_TARGET)
+sandboxes: $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(BOSS_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) $(MAP_EDITOR_SANDBOX_TARGET)
 
 # 链接可执行文件
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
-$(PLAYER_SANDBOX_TARGET): src/sandbox/PlayerSandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/PlayerSandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
+$(PLAYER_SANDBOX_TARGET): src/sandbox/PlayerSandbox.cpp src/combat/CombatSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/PlayerSandbox.cpp src/combat/CombatSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
 
 $(SKILL_SANDBOX_TARGET): src/sandbox/SkillSandbox.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/SkillSandbox.cpp $(LDFLAGS)
 
-$(COMBAT_SANDBOX_TARGET): src/sandbox/CombatSandbox.cpp $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/CombatSandbox.cpp $(LDFLAGS)
+$(COMBAT_SANDBOX_TARGET): src/sandbox/CombatSandbox.cpp src/combat/CombatSystem.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/CombatSandbox.cpp src/combat/CombatSystem.cpp $(LDFLAGS)
 
-$(ENEMY_SANDBOX_TARGET): src/sandbox/EnemySandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/EnemySandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
+$(ENEMY_SANDBOX_TARGET): src/sandbox/EnemySandbox.cpp src/combat/CombatSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/EnemySandbox.cpp src/combat/CombatSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
+
+$(BOSS_SANDBOX_TARGET): src/sandbox/BossSandbox.cpp src/combat/CombatSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/BossSandbox.cpp src/combat/CombatSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
 
 $(WORLD_SANDBOX_TARGET): src/sandbox/WorldSandbox.cpp src/world/WorldSystem.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/WorldSandbox.cpp src/world/WorldSystem.cpp $(LDFLAGS)
 
-$(MAP_EDITOR_SANDBOX_TARGET): src/sandbox/MapEditorSandbox.cpp src/world/WorldSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/MapEditorSandbox.cpp src/world/WorldSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
+$(MAP_EDITOR_SANDBOX_TARGET): src/sandbox/MapEditorSandbox.cpp src/combat/CombatSystem.cpp src/world/WorldSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/MapEditorSandbox.cpp src/combat/CombatSystem.cpp src/world/WorldSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
 
 # 编译源文件
 %.o: %.cpp $(HEADERS)
@@ -92,10 +101,11 @@ ifeq ($(OS),Windows_NT)
 	@if exist $(SKILL_SANDBOX_TARGET) del /Q $(SKILL_SANDBOX_TARGET) 2>nul
 	@if exist $(COMBAT_SANDBOX_TARGET) del /Q $(COMBAT_SANDBOX_TARGET) 2>nul
 	@if exist $(ENEMY_SANDBOX_TARGET) del /Q $(ENEMY_SANDBOX_TARGET) 2>nul
+	@if exist $(BOSS_SANDBOX_TARGET) del /Q $(BOSS_SANDBOX_TARGET) 2>nul
 	@if exist $(WORLD_SANDBOX_TARGET) del /Q $(WORLD_SANDBOX_TARGET) 2>nul
 	@if exist $(MAP_EDITOR_SANDBOX_TARGET) del /Q $(MAP_EDITOR_SANDBOX_TARGET) 2>nul
 else
-	@rm -f $(OBJS) $(TARGET) $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) $(MAP_EDITOR_SANDBOX_TARGET) 2>/dev/null || true
+	@rm -f $(OBJS) $(TARGET) $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(BOSS_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) $(MAP_EDITOR_SANDBOX_TARGET) 2>/dev/null || true
 endif
 	@echo "清理完成"
 
@@ -140,6 +150,13 @@ else
 	@$(ENEMY_SANDBOX_TARGET)
 endif
 
+run-boss-sandbox: $(BOSS_SANDBOX_TARGET)
+ifneq ($(OS),Windows_NT)
+	@./$(BOSS_SANDBOX_TARGET)
+else
+	@$(BOSS_SANDBOX_TARGET)
+endif
+
 run-world-sandbox: $(WORLD_SANDBOX_TARGET)
 ifneq ($(OS),Windows_NT)
 	@./$(WORLD_SANDBOX_TARGET)
@@ -172,10 +189,11 @@ help:
 	@echo "  make run-skill-sandbox   - 运行技能沙盒"
 	@echo "  make run-combat-sandbox  - 运行战斗沙盒"
 	@echo "  make run-enemy-sandbox   - 运行敌人沙盒"
+	@echo "  make run-boss-sandbox    - 运行 Boss 沙盒"
 	@echo "  make run-world-sandbox   - 运行世界沙盒"
 	@echo "  make sandboxes           - 编译全部沙盒（含地图编辑器）"
 	@echo "  make debug   - 编译调试版本"
 	@echo "  make info    - 显示项目信息"
 
 # 伪目标
-.PHONY: all sandboxes clean rebuild run run-player-sandbox run-skill-sandbox run-combat-sandbox run-enemy-sandbox run-world-sandbox debug info help
+.PHONY: all sandboxes clean rebuild run run-player-sandbox run-skill-sandbox run-combat-sandbox run-enemy-sandbox run-boss-sandbox run-world-sandbox debug info help

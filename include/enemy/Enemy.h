@@ -33,6 +33,38 @@ enum class FlyingEnemyState {
     Dead
 };
 
+enum class BossState {
+    Dormant,
+    Intro,
+    Positioning,
+    AttackStartup,
+    AttackRecovery,
+    Staggered,
+    Dead
+};
+
+enum class BossAttackType {
+    None,
+    SweepSlash,
+    DashSlash,
+    FireballBurst,
+    MeteorDrop
+};
+
+struct BossAttackSignal {
+    BossAttackType type;
+    Position origin;
+    FacingDirection facingDirection;
+
+    BossAttackSignal(BossAttackType attackType = BossAttackType::None,
+                     const Position& attackOrigin = Position(),
+                     FacingDirection facing = FacingDirection::Right)
+        : type(attackType),
+          origin(attackOrigin),
+          facingDirection(facing) {
+    }
+};
+
 class Enemy : public CombatActor {
 public:
     virtual ~Enemy() = default;
@@ -174,35 +206,127 @@ private:
 
 class Boss : public Enemy {
 public:
+    const std::string& getId() const override;
+    Position getPosition() const override;
+    FacingDirection getFacingDirection() const override;
+    const CharacterStats& getStats() const override;
+    CharacterStats& accessStats() override;
+    HitFeedbackState& accessHitFeedback() override;
+    void takeDamage(const DamageInfo& damageInfo) override;
+    bool isAlive() const override;
+
+    void setPosition(const Position& newPosition);
+    void setSpawnPosition(const Position& newSpawnPosition);
+    Position getSpawnPosition() const;
+    BossState getState() const;
+    bool isRenderable() const;
+    bool shouldDespawn() const;
+    char getRenderGlyph() const;
+    bool consumeAttackSignal(BossAttackSignal& signal);
+    bool isStaggered() const;
+    int getStaggerThreshold() const;
+    int getStaggerDamage() const;
+    bool isStaggerWindowActive() const;
+    float getStaggerWindowRemaining() const;
     bool shouldEnterStagger() const;
     void resetStaggerMeter();
+    virtual AttackDefinition getAttackForType(BossAttackType attackType) const = 0;
 
 protected:
-    int staggerThreshold = 40;
-    int damageTakenSinceLastStagger = 0;
-    TimedWindow staggerWindow = {false, 5.0f, 0.0f};
+    Boss(const std::string& enemyId,
+         EnemyType type,
+         const Position& initialSpawnPosition,
+         char baseRenderGlyph);
+
+    bool updateCommonState(float deltaSeconds);
+    void updateHitFeedback(float deltaSeconds);
+    void faceToward(const Position& targetPosition);
+    void moveToward(const Position& targetPosition, float deltaSeconds);
+    bool isWithinHorizontalRange(const Position& targetPosition, float range) const;
+    bool isWithinVerticalRange(const Position& targetPosition, float range) const;
+    void wakeUp(float introSeconds);
+    void startAttack(BossAttackType attackType, float startupSeconds, float recoverySeconds);
+    void enterStagger(float staggerSeconds);
+    void finishRecovery();
+
+    std::string id;
+    EnemyType enemyType;
+    Position position;
+    Position spawnPosition;
+    FacingDirection facingDirection;
+    CharacterStats stats;
+    HitFeedbackState hitFeedback;
+    BossState state;
+    bool alive;
+    char baseRenderGlyph;
+    BossAttackSignal queuedAttackSignal;
+    bool attackSignalQueued;
+    float moveAccumulator;
+    float moveStepSeconds;
+    float introRemaining;
+    float attackStartupRemaining;
+    float attackRecoveryRemaining;
+    float staggerRemaining;
+    float hitFlashSeconds;
+    float deathFlashSeconds;
+    float deathMarkerSeconds;
+    float deathAnimationRemaining;
+    int staggerThreshold;
+    int damageTakenSinceLastStagger;
+    TimedWindow staggerWindow;
+    BossAttackType startupAttackType;
+    float startupRecoverySeconds;
 };
 
 class MeleeBoss : public Boss {
 public:
+    MeleeBoss(const std::string& enemyId = "melee_boss",
+              const Position& spawnPosition = Position());
+
     EnemyType getEnemyType() const override;
     void updateAI(const Position& playerPosition, float deltaSeconds) override;
     AttackDefinition getPrimaryAttack() const override;
+    AttackDefinition getAttackForType(BossAttackType attackType) const override;
     AttackDefinition getBackDashSlash() const;
     AttackDefinition getFrontJumpSlash() const;
     AttackDefinition getFrontDash() const;
     int getHkdReward() const override;
+
+private:
+    float aggroRange;
+    float loseAggroRange;
+    float slashRange;
+    float dashRange;
+    float introSeconds;
+    float attackStartupSeconds;
+    float attackRecoverySeconds;
+    float staggerSeconds;
 };
 
 class RangedBoss : public Boss {
 public:
+    RangedBoss(const std::string& enemyId = "ranged_boss",
+               const Position& spawnPosition = Position());
+
     EnemyType getEnemyType() const override;
     void updateAI(const Position& playerPosition, float deltaSeconds) override;
     AttackDefinition getPrimaryAttack() const override;
+    AttackDefinition getAttackForType(BossAttackType attackType) const override;
     AttackDefinition getStaffKnockback() const;
     AttackDefinition getFireballShot() const;
     AttackDefinition getMeteorRain() const;
     int getHkdReward() const override;
+
+private:
+    float aggroRange;
+    float loseAggroRange;
+    float castRange;
+    float retreatRange;
+    float introSeconds;
+    float attackStartupSeconds;
+    float attackRecoverySeconds;
+    float staggerSeconds;
+    bool nextAttackMeteor;
 };
 
 } // namespace game

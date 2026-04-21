@@ -12,7 +12,7 @@ if errorlevel 1 (
 
 set "SANDBOX=%~1"
 if "%SANDBOX%"=="" (
-    echo Usage: run_sandbox.bat [player^|skill^|combat^|enemy^|world^|editor]
+    echo Usage: run_sandbox.bat [player^|skill^|combat^|enemy^|boss^|world^|editor]
     echo Example: run_sandbox.bat player
     pause
     exit /b 1
@@ -25,7 +25,7 @@ set "EXTRA_SRCS="
 if /I "%SANDBOX%"=="player" (
     set "TARGET=player_sandbox.exe"
     set "ENTRY=src\sandbox\PlayerSandbox.cpp"
-    set "EXTRA_SRCS=src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
+    set "EXTRA_SRCS=src\combat\CombatSystem.cpp src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
 )
 
 if /I "%SANDBOX%"=="skill" (
@@ -36,12 +36,19 @@ if /I "%SANDBOX%"=="skill" (
 if /I "%SANDBOX%"=="combat" (
     set "TARGET=combat_sandbox.exe"
     set "ENTRY=src\sandbox\CombatSandbox.cpp"
+    set "EXTRA_SRCS=src\combat\CombatSystem.cpp"
 )
 
 if /I "%SANDBOX%"=="enemy" (
     set "TARGET=enemy_sandbox.exe"
     set "ENTRY=src\sandbox\EnemySandbox.cpp"
-    set "EXTRA_SRCS=src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
+    set "EXTRA_SRCS=src\combat\CombatSystem.cpp src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
+)
+
+if /I "%SANDBOX%"=="boss" (
+    set "TARGET=boss_sandbox.exe"
+    set "ENTRY=src\sandbox\BossSandbox.cpp"
+    set "EXTRA_SRCS=src\combat\CombatSystem.cpp src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
 )
 
 if /I "%SANDBOX%"=="world" (
@@ -53,12 +60,12 @@ if /I "%SANDBOX%"=="world" (
 if /I "%SANDBOX%"=="editor" (
     set "TARGET=map_editor_sandbox.exe"
     set "ENTRY=src\sandbox\MapEditorSandbox.cpp"
-    set "EXTRA_SRCS=src\world\WorldSystem.cpp src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
+    set "EXTRA_SRCS=src\combat\CombatSystem.cpp src\world\WorldSystem.cpp src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
 )
 
 if "%ENTRY%"=="" (
     echo [ERROR] Unknown sandbox: %SANDBOX%
-    echo Available: player, skill, combat, enemy, world, editor
+    echo Available: player, skill, combat, enemy, boss, world, editor
     pause
     exit /b 1
 )

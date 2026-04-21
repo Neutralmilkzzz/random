@@ -34,6 +34,7 @@ public:
     SaveData load() const;
     void saveOnMapEntry(const SaveData& saveData);
     SaveData restoreAfterDeath(const SaveData& saveData) const;
+    void clear() const;
 };
 
 } // namespace game

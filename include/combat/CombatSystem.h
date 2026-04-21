@@ -8,6 +8,8 @@
 
 namespace game {
 
+class Enemy;
+
 class CombatActor {
 public:
     virtual ~CombatActor() = default;
@@ -33,6 +35,18 @@ struct AttackDefinition {
     int knockbackY = 0;
 };
 
+struct DamageResolution {
+    bool hitApplied = false;
+    bool targetDefeated = false;
+    int damageApplied = 0;
+    int soulGranted = 0;
+};
+
+struct RewardResolution {
+    int hkdGranted = 0;
+    int soulGranted = 0;
+};
+
 class Projectile {
 public:
     virtual ~Projectile() = default;
@@ -49,6 +63,14 @@ public:
     void registerProjectile(Projectile* projectile);
     void update(float deltaSeconds);
     bool canResolveHeal(const CombatActor& actor, float secondsSinceLastHit) const;
+    DamageResolution resolveAttack(CombatActor& target, const AttackDefinition& attackDefinition) const;
+    DamageResolution resolveDamage(CombatActor& target,
+                                   const DamageInfo& damageInfo,
+                                   int soulGainOnHit = 0) const;
+    RewardResolution buildEnemyReward(const Enemy& enemy) const;
+    void applyReward(CharacterStats& recipient, const RewardResolution& reward) const;
+    void openTimedWindow(TimedWindow& window, float durationSeconds) const;
+    void advanceTimedWindow(TimedWindow& window, float deltaSeconds) const;
 
 private:
     std::vector<AttackDefinition> queuedAttacks;
