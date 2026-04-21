@@ -48,8 +48,8 @@ struct SandboxState {
 
     SandboxState()
         : currentMapId("spawn_village"),
-          currentSpawnPointId("village_entry"),
-          lastInteraction("Village sandbox ready."),
+          currentSpawnPointId("player_start"),
+          lastInteraction("World sandbox ready."),
           prompt("Walk around with A/D and SPACE. Press E near NPCs or doors."),
           shopOpen(false) {
     }
@@ -139,13 +139,13 @@ bool isAdjacent(const game::Position& a, const game::Position& b) {
 }
 
 SandboxNpcInfo getNpcInfo(const std::string& npcId) {
-    if (npcId == "village_elder") {
+    if (npcId == "village_elder" || npcId == "village_chief") {
         SandboxNpcInfo npc;
         npc.id = npcId;
-        npc.displayName = "Elder";
+        npc.displayName = "Chief";
         npc.glyph = 'L';
         npc.opensShop = false;
-        npc.interactionText = "老人主动开口了。（具体对话内容待补）";
+        npc.interactionText = "村长正在等待后续对白接线。";
         return npc;
     }
 
@@ -159,43 +159,39 @@ SandboxNpcInfo getNpcInfo(const std::string& npcId) {
         return npc;
     }
 
+    if (npcId == "merchant" || npcId == "merchant_shop") {
+        SandboxNpcInfo npc;
+        npc.id = npcId;
+        npc.displayName = "Merchant";
+        npc.glyph = 'M';
+        npc.opensShop = false;
+        npc.interactionText = "商店逻辑待补，现在先保留站位，不再打开占位面板。";
+        return npc;
+    }
+
+    if (npcId == "event_marker") {
+        SandboxNpcInfo npc;
+        npc.id = npcId;
+        npc.displayName = "Event Marker";
+        npc.glyph = '?';
+        npc.opensShop = false;
+        npc.interactionText = "事件逻辑待补，现在这里只是预留位。";
+        return npc;
+    }
+
     SandboxNpcInfo npc;
     npc.id = npcId;
-    npc.displayName = "Merchant";
-    npc.glyph = 'M';
-    npc.opensShop = true;
-    npc.interactionText = "商人已经开门营业了。商店内容先用占位面板代替。";
+    npc.displayName = "NPC";
+    npc.glyph = 'N';
+    npc.opensShop = false;
+    npc.interactionText = "NPC 占位。";
     return npc;
 }
 
 std::vector<DecorationCell> buildDecorations(const game::MapDefinition& mapDefinition) {
     std::vector<DecorationCell> decorations;
 
-    if (mapDefinition.id == "spawn_village") {
-        for (int x = 48; x <= 60; ++x) {
-            decorations.push_back(DecorationCell(game::Position(x, 4), '^', true));
-        }
-
-        for (int y = 5; y <= 8; ++y) {
-            decorations.push_back(DecorationCell(game::Position(49, y), '|', true));
-            decorations.push_back(DecorationCell(game::Position(60, y), '|', true));
-        }
-
-        for (int x = 50; x <= 59; ++x) {
-            decorations.push_back(DecorationCell(game::Position(x, 5), '=', true));
-        }
-
-        for (int x = 50; x <= 54; ++x) {
-            decorations.push_back(DecorationCell(game::Position(x, 8), '=', true));
-        }
-        for (int x = 56; x <= 59; ++x) {
-            decorations.push_back(DecorationCell(game::Position(x, 8), '=', true));
-        }
-
-        decorations.push_back(DecorationCell(game::Position(55, 8), 'H', false));
-        decorations.push_back(DecorationCell(game::Position(52, 6), 'o', false));
-        decorations.push_back(DecorationCell(game::Position(57, 6), 'o', false));
-    } else if (mapDefinition.id == "village_house_interior") {
+    if (mapDefinition.id == "village_house_interior") {
         decorations.push_back(DecorationCell(game::Position(6, 8), 'H', false));
         decorations.push_back(DecorationCell(game::Position(18, 7), '=', true));
         decorations.push_back(DecorationCell(game::Position(19, 7), '=', true));
@@ -300,7 +296,7 @@ void resetWorldSandbox(const game::MapDefinition& mapDefinition,
                        game::SaveData& saveData,
                        std::string& terrainMap,
                        game::Position& playerPosition) {
-    state.lastInteraction = "Village sandbox ready.";
+    state.lastInteraction = "World sandbox ready.";
     state.prompt = "Walk around with A/D and SPACE. Press E near NPCs or doors.";
     loadMapState(mapDefinition, spawnPointId, state, saveData, terrainMap, playerPosition);
 }

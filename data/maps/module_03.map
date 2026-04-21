@@ -1,0 +1,47 @@
+id=module_03
+display_name=Module 03
+type=CombatRoom
+boss_room=false
+
+[spawn_points]
+from_module_02,72,16
+from_module_04,3,16
+from_random_event_01,50,16
+from_spawn_village_shortcut,36,1
+
+[enemy_spawns]
+ground_enemy_basic,14,16
+flying_enemy_basic,24,8
+ground_enemy_basic,35,16
+flying_enemy_basic,44,5
+ground_enemy_basic,60,16
+
+[npc_placements]
+
+[transitions]
+module_03,module_02,from_module_03,73,16
+module_03,module_04,from_module_03,2,16
+module_03,random_event_01,from_module_03,50,16
+module_03,spawn_village,from_module_03_shortcut,37,1
+
+[terrain]
+============================================================================
+=                                                                          =
+=                                ========                                  =
+=                                                                          =
+=                 =========                     =========                  =
+=                                                                          =
+=                                           =========                      =
+=          =========                                                       =
+=                                                                          =
+=                        ==========                      =========         =
+=                                                                          =
+=                                   =========                              =
+=                                                                          =
+=            =========                                  =========          =
+=                                                                          =
+=                                                      ========            =
+=                                                                          =
+============================================================================
+=                                                                          =
+============================================================================

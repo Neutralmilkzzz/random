@@ -1,40 +1,40 @@
-id=spawn_village
-display_name=Spawn Village
-type=SpawnVillage
+id=random_event_01
+display_name=Random Event 01
+type=EventRoom
 boss_room=false
 
 [spawn_points]
-player_start,8,14
-from_module_01,72,14
-from_module_03_shortcut,60,12
-from_module_05_shortcut,58,14
+from_module_03,50,2
 
 [enemy_spawns]
+ground_enemy_basic,22,14
+ground_enemy_basic,41,14
+ground_enemy_basic,60,14
+ground_enemy_basic,57,11
+flying_enemy_basic,31,8
+flying_enemy_basic,56,5
 
 [npc_placements]
-village_chief,11,12
-doctor,27,10
-merchant,45,8
+event_marker,43,11
 
 [transitions]
-spawn_village,module_01,from_spawn_village,74,14
-spawn_village,module_03,from_spawn_village_shortcut,68,12
+random_event_01,module_03,from_random_event_01,50,2
 
 [terrain]
 ============================================================================
 =                                                                          =
 =                                                                          =
+=                                            ===========                   =
 =                                                                          =
 =                                                                          =
+=                                    ===========     ===========           =
 =                                                                          =
 =                                                                          =
+=                           =============     =============                =
 =                                                                          =
 =                                                                          =
-=                                      ==============        =======       =
+=                =============   =============   =============             =
 =                                                                          =
-=                    ==============                         ============   =
-=                                                                          =
-=     ============                                      ==============     =
 =                                                                          =
 ============================================================================
 =                                                                          =

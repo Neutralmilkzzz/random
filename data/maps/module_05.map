@@ -1,0 +1,42 @@
+id=module_05
+display_name=Module 05
+type=CombatRoom
+boss_room=false
+
+[spawn_points]
+from_module_04,18,14
+from_boss_room_01,3,14
+
+[enemy_spawns]
+ground_enemy_basic,24,14
+ground_enemy_basic,39,14
+ground_enemy_basic,56,14
+flying_enemy_basic,31,9
+flying_enemy_basic,52,7
+
+[npc_placements]
+
+[transitions]
+module_05,module_04,from_module_05,18,15
+module_05,boss_room_01,from_module_05,2,14
+module_05,spawn_village,from_module_05_shortcut,73,14
+
+[terrain]
+============================================================================
+=                                                                          =
+=                                                                          =
+=        ==========                             ==========                 =
+=                                                                          =
+=                     ==========                                           =
+=                                           ==========                     =
+=        =========                                                         =
+=                             ==========                                   =
+=                                                          ========        =
+=                                                                          =
+=                  ============                    ============            =
+=                                                                          =
+=        ========                              ==========                  =
+=                                                                          =
+============================================================================
+=                                                                          =
+============================================================================

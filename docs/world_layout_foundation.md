@@ -6,6 +6,19 @@
 
 暂时**不**在这里细画平台、敌人、地形细节。具体内容后续由 `MapEditorSandbox` 去摆。
 
+当前仓库已经先落地了一版**可跑通白盒地图**：
+
+- `spawn_village`
+- `module_01`
+- `module_02`
+- `module_03`
+- `random_event_01`
+- `module_04`
+- `module_05`
+- `boss_room_01`
+
+这一版优先保证主线路径和房间顺序可验证，**捷径门状态逻辑暂缓**。
+
 ---
 
 ## 世界总览

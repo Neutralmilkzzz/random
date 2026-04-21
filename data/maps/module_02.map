@@ -1,0 +1,41 @@
+id=module_02
+display_name=Module 02
+type=CombatRoom
+boss_room=false
+
+[spawn_points]
+from_module_01,10,1
+from_module_03,3,14
+
+[enemy_spawns]
+ground_enemy_basic,18,14
+ground_enemy_basic,31,11
+ground_enemy_basic,48,14
+flying_enemy_basic,40,6
+flying_enemy_basic,58,7
+
+[npc_placements]
+
+[transitions]
+module_02,module_01,from_module_02,10,2
+module_02,module_03,from_module_02,2,14
+
+[terrain]
+============================================================================
+=                                                                          =
+=      =========                                                           =
+=                     =========                                            =
+=                                  ===========                             =
+=                                                   =========              =
+=                   ========                                               =
+=                                  =========                               =
+=         =========                                  ========              =
+=                               ============                               =
+=                     ========                                             =
+=            =========                     ==========                      =
+=                                     ===========                          =
+=   ================               ============                            =
+=                                                                          =
+============================================================================
+=                                                                          =
+============================================================================

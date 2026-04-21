@@ -10,7 +10,7 @@ namespace {
 const float kFixedDeltaSeconds = 0.016f;
 const float kRunSpeed = 10.79f;
 const float kAirMoveSpeed = 10.79f;
-const float kInitialJumpUpwardSpeed = 12.22f;
+const float kInitialJumpUpwardSpeed = 17.11f;
 const float kJumpInitialHoldTime = 0.2f;
 const float kJumpVelocityDropStep = 0.95f;
 const float kJumpVelocityDropInterval = 0.02f;

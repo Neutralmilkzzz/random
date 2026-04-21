@@ -29,7 +29,8 @@ RUNTIME_SRCS = src/player/Player.cpp \
 
 # 源文件
 SRCS = src/core/main.cpp \
-       src/enemy/Enemy.cpp \
+        src/enemy/Enemy.cpp \
+       src/world/WorldSystem.cpp \
        $(RUNTIME_SRCS)
 
 # 头文件

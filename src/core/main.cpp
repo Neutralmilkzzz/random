@@ -1,12 +1,17 @@
 #include <chrono>
+#include <cmath>
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_map>
+#include <vector>
 
 #include "enemy/Enemy.h"
 #include "input/KeyStateManager.h"
 #include "player/Player.h"
+#include "save/SaveSystem.h"
 #include "world/MapDrawer.h"
+#include "world/WorldSystem.h"
 
 namespace {
 
@@ -15,28 +20,7 @@ const int kTitleScreenWidth = 76;
 const int kTitleScreenHeight = 24;
 const int kTitleUnavailableHintFrames = 90;
 const int kTitleStartTransitionFrames = 24;
-const game::Position kGroundEnemySpawnPosition(24, 14);
-const game::Position kFlyingEnemySpawnPosition(40, 6);
 const int kFlyingProjectileStepFrames = 3;
-const std::string kMainTerrainWithPlayer =
-        "============================================================================\n"
-        "=                                                                          =\n"
-        "=                                                                          =\n"
-        "=                                          ==========                      =\n"
-        "=                                                                          =\n"
-        "=                                    ===                                   =\n"
-        "=                                                                          =\n"
-        "=                              ===                                         =\n"
-        "=                                                                          =\n"
-        "=                       ===                                                =\n"
-        "=                                                                          =\n"
-        "=                 ===                                                      =\n"
-        "=                                                                          =\n"
-        "=         =======                                                          =\n"
-        "=  @                                                                       =\n"
-        "============================================================================\n"
-        "============================================================================\n"
-        "============================================================================";
 
 struct EnemyProjectile {
     game::Position position;
@@ -44,6 +28,37 @@ struct EnemyProjectile {
     int dy;
     int stepCooldown;
     int remainingFrames;
+
+    EnemyProjectile()
+        : dx(0),
+          dy(0),
+          stepCooldown(0),
+          remainingFrames(0) {
+    }
+};
+
+struct RuntimeNpcInfo {
+    std::string displayName;
+    char glyph;
+    bool opensShop;
+    std::string interactionText;
+};
+
+struct RuntimeState {
+    std::string currentMapId;
+    std::string currentSpawnPointId;
+    std::string lastInteraction;
+    std::string prompt;
+    bool shopOpen;
+    std::unordered_map<int, bool> previousKeys;
+
+    RuntimeState()
+        : currentMapId("spawn_village"),
+          currentSpawnPointId("player_start"),
+          lastInteraction("Main world ready."),
+          prompt("Move with A/D and SPACE. Press E near doors or NPCs."),
+          shopOpen(false) {
+    }
 };
 
 enum class TitleMenuSelection {
@@ -103,6 +118,10 @@ void placeGlyph(std::string& map, const game::Position& position, char glyph) {
     map[indexFromPosition(map, position)] = glyph;
 }
 
+bool isAdjacent(const game::Position& a, const game::Position& b) {
+    return std::abs(a.x - b.x) + std::abs(a.y - b.y) == 1;
+}
+
 bool isKeyDown(const KeyStateManager& keyStateManager, int keyCode) {
     const std::unordered_map<int, bool>::const_iterator it = keyStateManager.keyStates.find(keyCode);
     return it != keyStateManager.keyStates.end() && it->second;
@@ -140,7 +159,9 @@ void placeCenteredLine(std::vector<std::string>& lines, int row, const std::stri
         start = 1;
     }
 
-    for (size_t index = 0; index < text.size() && start + static_cast<int>(index) < static_cast<int>(lines[row].size()) - 1; ++index) {
+    for (size_t index = 0; index < text.size() &&
+                           start + static_cast<int>(index) < static_cast<int>(lines[row].size()) - 1;
+         ++index) {
         lines[row][start + static_cast<int>(index)] = text[index];
     }
 }
@@ -273,20 +294,266 @@ bool runTitleScreen(MapDrawer& mapDrawer, KeyStateManager& keyStateManager) {
     }
 }
 
-std::string buildTerrainMap(const std::string& sourceMap, game::Position& playerPosition) {
-    std::string terrainMap = sourceMap;
-    playerPosition = findGlyphPosition(terrainMap, '@');
-    if (playerPosition.x >= 0 && playerPosition.y >= 0) {
-        placeGlyph(terrainMap, playerPosition, ' ');
+std::string joinTerrainRows(const std::vector<std::string>& rows) {
+    std::ostringstream stream;
+    for (size_t index = 0; index < rows.size(); ++index) {
+        stream << rows[index];
+        if (index + 1 < rows.size()) {
+            stream << '\n';
+        }
     }
+    return stream.str();
+}
+
+game::Position findSpawnPoint(const game::MapDefinition& mapDefinition, const std::string& spawnPointId) {
+    for (size_t index = 0; index < mapDefinition.spawnPoints.size(); ++index) {
+        if (mapDefinition.spawnPoints[index].id == spawnPointId) {
+            return mapDefinition.spawnPoints[index].position;
+        }
+    }
+
+    if (!mapDefinition.spawnPoints.empty()) {
+        return mapDefinition.spawnPoints.front().position;
+    }
+
+    return game::Position(-1, -1);
+}
+
+bool isGroundEnemyTemplate(const std::string& enemyTemplateId) {
+    return enemyTemplateId.find("flying") == std::string::npos;
+}
+
+RuntimeNpcInfo getNpcInfo(const std::string& npcId) {
+    if (npcId == "village_elder" || npcId == "village_chief") {
+        RuntimeNpcInfo npc;
+        npc.displayName = "Chief";
+        npc.glyph = 'L';
+        npc.opensShop = false;
+        npc.interactionText = "村长正在等待后续对白接线。";
+        return npc;
+    }
+
+    if (npcId == "doctor") {
+        RuntimeNpcInfo npc;
+        npc.displayName = "Doctor";
+        npc.glyph = 'D';
+        npc.opensShop = false;
+        npc.interactionText = "医生位置已经接入，后续可补对话和治疗。";
+        return npc;
+    }
+
+    if (npcId == "merchant" || npcId == "merchant_shop") {
+        RuntimeNpcInfo npc;
+        npc.displayName = "Merchant";
+        npc.glyph = 'M';
+        npc.opensShop = false;
+        npc.interactionText = "商店逻辑待补，现在先保留站位，不再打开占位面板。";
+        return npc;
+    }
+
+    if (npcId == "event_marker") {
+        RuntimeNpcInfo npc;
+        npc.displayName = "Event Marker";
+        npc.glyph = '?';
+        npc.opensShop = false;
+        npc.interactionText = "事件逻辑待补，现在这里只是预留位。";
+        return npc;
+    }
+
+    RuntimeNpcInfo npc;
+    npc.displayName = "NPC";
+    npc.glyph = 'N';
+    npc.opensShop = false;
+    npc.interactionText = "NPC 占位。";
+    return npc;
+}
+
+std::string buildTerrainMap(const game::MapDefinition& mapDefinition,
+                            const std::string& spawnPointId,
+                            game::Position& playerPosition) {
+    std::string terrainMap = joinTerrainRows(mapDefinition.terrainRows);
+    playerPosition = findSpawnPoint(mapDefinition, spawnPointId);
+
+    const game::Position glyphPosition = findGlyphPosition(terrainMap, '@');
+    if (glyphPosition.x >= 0 && glyphPosition.y >= 0) {
+        placeGlyph(terrainMap, glyphPosition, ' ');
+    }
+
     return terrainMap;
+}
+
+void spawnEnemiesFromMap(const game::MapDefinition& mapDefinition,
+                         std::vector<game::GroundEnemy>& groundEnemies,
+                         std::vector<game::FlyingEnemy>& flyingEnemies) {
+    groundEnemies.clear();
+    flyingEnemies.clear();
+
+    for (size_t index = 0; index < mapDefinition.enemySpawns.size(); ++index) {
+        if (isGroundEnemyTemplate(mapDefinition.enemySpawns[index].enemyTemplateId)) {
+            groundEnemies.push_back(
+                    game::GroundEnemy("ground_enemy_" + std::to_string(index + 1),
+                                      mapDefinition.enemySpawns[index].position));
+        } else {
+            flyingEnemies.push_back(
+                    game::FlyingEnemy("flying_enemy_" + std::to_string(index + 1),
+                                      mapDefinition.enemySpawns[index].position));
+        }
+    }
+}
+
+void loadMapState(const game::MapDefinition& mapDefinition,
+                  const std::string& spawnPointId,
+                  RuntimeState& state,
+                  game::SaveData& saveData,
+                  std::string& terrainMap,
+                  game::Position& playerPosition,
+                  std::vector<game::GroundEnemy>& groundEnemies,
+                  std::vector<game::FlyingEnemy>& flyingEnemies,
+                  std::vector<EnemyProjectile>& enemyProjectiles) {
+    terrainMap = buildTerrainMap(mapDefinition, spawnPointId, playerPosition);
+    spawnEnemiesFromMap(mapDefinition, groundEnemies, flyingEnemies);
+    enemyProjectiles.clear();
+    saveData.currentMapId = mapDefinition.id;
+    saveData.respawnMapId = spawnPointId;
+    saveData.hasActiveRun = true;
+    state.currentMapId = mapDefinition.id;
+    state.currentSpawnPointId = spawnPointId;
+    state.shopOpen = false;
+}
+
+std::string buildCollisionMap(const std::string& terrainMap,
+                              const game::Position& playerPosition,
+                              const game::MapDefinition& mapDefinition,
+                              const std::vector<game::GroundEnemy>& groundEnemies,
+                              const std::vector<game::FlyingEnemy>& flyingEnemies) {
+    std::string collisionMap = terrainMap;
+
+    for (size_t index = 0; index < mapDefinition.npcPlacements.size(); ++index) {
+        placeGlyph(collisionMap,
+                   mapDefinition.npcPlacements[index].position,
+                   getNpcInfo(mapDefinition.npcPlacements[index].npcId).glyph);
+    }
+
+    for (size_t index = 0; index < groundEnemies.size(); ++index) {
+        if (groundEnemies[index].isAlive()) {
+            placeGlyph(collisionMap, groundEnemies[index].getPosition(), 'g');
+        }
+    }
+
+    for (size_t index = 0; index < flyingEnemies.size(); ++index) {
+        if (flyingEnemies[index].isAlive()) {
+            placeGlyph(collisionMap, flyingEnemies[index].getPosition(), 'f');
+        }
+    }
+
+    placeGlyph(collisionMap, playerPosition, '@');
+    return collisionMap;
+}
+
+std::string buildRenderMap(const std::string& terrainMap,
+                           const game::Position& playerPosition,
+                           const game::MapDefinition& mapDefinition,
+                           const std::vector<game::GroundEnemy>& groundEnemies,
+                           const std::vector<game::FlyingEnemy>& flyingEnemies,
+                           const std::vector<EnemyProjectile>& enemyProjectiles) {
+    std::string renderMap = terrainMap;
+
+    for (size_t index = 0; index < mapDefinition.transitions.size(); ++index) {
+        placeGlyph(renderMap, mapDefinition.transitions[index].triggerPosition, 'D');
+    }
+
+    for (size_t index = 0; index < mapDefinition.npcPlacements.size(); ++index) {
+        placeGlyph(renderMap,
+                   mapDefinition.npcPlacements[index].position,
+                   getNpcInfo(mapDefinition.npcPlacements[index].npcId).glyph);
+    }
+
+    for (size_t index = 0; index < groundEnemies.size(); ++index) {
+        if (!groundEnemies[index].isRenderable()) {
+            continue;
+        }
+
+        const game::Position enemyPosition = groundEnemies[index].getPosition();
+        placeGlyph(renderMap, enemyPosition, groundEnemies[index].getRenderGlyph());
+
+        if (groundEnemies[index].getState() == game::GroundEnemyState::AttackStartup) {
+            const game::Position warningRow(enemyPosition.x, enemyPosition.y - 1);
+            placeGlyph(renderMap, game::Position(warningRow.x - 1, warningRow.y), '!');
+            placeGlyph(renderMap, warningRow, '!');
+            placeGlyph(renderMap, game::Position(warningRow.x + 1, warningRow.y), '!');
+        }
+    }
+
+    for (size_t index = 0; index < flyingEnemies.size(); ++index) {
+        if (!flyingEnemies[index].isRenderable()) {
+            continue;
+        }
+
+        const game::Position enemyPosition = flyingEnemies[index].getPosition();
+        placeGlyph(renderMap, enemyPosition, flyingEnemies[index].getRenderGlyph());
+
+        if (flyingEnemies[index].getState() == game::FlyingEnemyState::AttackStartup) {
+            const game::Position warningRow(enemyPosition.x, enemyPosition.y - 1);
+            placeGlyph(renderMap, game::Position(warningRow.x - 1, warningRow.y), '!');
+            placeGlyph(renderMap, warningRow, '!');
+            placeGlyph(renderMap, game::Position(warningRow.x + 1, warningRow.y), '!');
+        }
+    }
+
+    for (size_t index = 0; index < enemyProjectiles.size(); ++index) {
+        placeGlyph(renderMap, enemyProjectiles[index].position, '*');
+    }
+
+    placeGlyph(renderMap, playerPosition, '@');
+    return renderMap;
+}
+
+const game::NpcPlacement* findInteractableNpc(const game::MapDefinition& mapDefinition,
+                                              const game::Position& playerPosition) {
+    for (size_t index = 0; index < mapDefinition.npcPlacements.size(); ++index) {
+        if (isAdjacent(playerPosition, mapDefinition.npcPlacements[index].position)) {
+            return &mapDefinition.npcPlacements[index];
+        }
+    }
+    return 0;
+}
+
+const game::MapTransition* findInteractableTransition(const game::MapDefinition& mapDefinition,
+                                                      const game::Position& playerPosition) {
+    for (size_t index = 0; index < mapDefinition.transitions.size(); ++index) {
+        if (isAdjacent(playerPosition, mapDefinition.transitions[index].triggerPosition)) {
+            return &mapDefinition.transitions[index];
+        }
+    }
+    return 0;
+}
+
+void updatePrompt(const game::MapDefinition& mapDefinition,
+                  const game::Position& playerPosition,
+                  RuntimeState& state) {
+    const game::NpcPlacement* npcPlacement = findInteractableNpc(mapDefinition, playerPosition);
+    if (npcPlacement != 0) {
+        const RuntimeNpcInfo npcInfo = getNpcInfo(npcPlacement->npcId);
+        state.prompt = "Press E to interact with " + npcInfo.displayName + ".";
+        return;
+    }
+
+    const game::MapTransition* transition = findInteractableTransition(mapDefinition, playerPosition);
+    if (transition != 0) {
+        state.prompt = "Press E to use door.";
+        return;
+    }
+
+    state.prompt = "Move with A/D and SPACE. Press E near doors or NPCs.";
 }
 
 bool canEnemyOccupy(const std::string& terrainMap,
                     const game::Position& playerPosition,
+                    const std::vector<game::GroundEnemy>& groundEnemies,
+                    const std::vector<game::FlyingEnemy>& flyingEnemies,
                     const game::Position& targetPosition,
-                    const game::Position& otherEnemyPosition,
-                    bool otherEnemyBlocks) {
+                    bool checkingGround,
+                    int ignoreIndex) {
     if (!isInsidePlayableArea(terrainMap, targetPosition)) {
         return false;
     }
@@ -299,59 +566,79 @@ bool canEnemyOccupy(const std::string& terrainMap,
         return false;
     }
 
-    if (otherEnemyBlocks &&
-        targetPosition.x == otherEnemyPosition.x &&
-        targetPosition.y == otherEnemyPosition.y) {
-        return false;
+    for (size_t index = 0; index < groundEnemies.size(); ++index) {
+        if (checkingGround && static_cast<int>(index) == ignoreIndex) {
+            continue;
+        }
+        if (!groundEnemies[index].isAlive()) {
+            continue;
+        }
+
+        const game::Position enemyPosition = groundEnemies[index].getPosition();
+        if (enemyPosition.x == targetPosition.x && enemyPosition.y == targetPosition.y) {
+            return false;
+        }
+    }
+
+    for (size_t index = 0; index < flyingEnemies.size(); ++index) {
+        if (!checkingGround && static_cast<int>(index) == ignoreIndex) {
+            continue;
+        }
+        if (!flyingEnemies[index].isAlive()) {
+            continue;
+        }
+
+        const game::Position enemyPosition = flyingEnemies[index].getPosition();
+        if (enemyPosition.x == targetPosition.x && enemyPosition.y == targetPosition.y) {
+            return false;
+        }
     }
 
     return true;
 }
 
-std::string buildCollisionMap(const std::string& terrainMap,
-                              const game::Position& playerPosition,
-                              const game::GroundEnemy& groundEnemy,
-                              const game::FlyingEnemy& flyingEnemy) {
-    std::string collisionMap = terrainMap;
-    placeGlyph(collisionMap, playerPosition, '@');
+int findClosestGroundEnemyIndex(const std::vector<game::GroundEnemy>& groundEnemies,
+                                const game::Position& playerPosition) {
+    int bestIndex = -1;
+    int bestDistance = 1000000;
 
-    if (groundEnemy.isAlive()) {
-        placeGlyph(collisionMap, groundEnemy.getPosition(), 'g');
+    for (size_t index = 0; index < groundEnemies.size(); ++index) {
+        if (!groundEnemies[index].isAlive()) {
+            continue;
+        }
+
+        const game::Position enemyPosition = groundEnemies[index].getPosition();
+        const int distance = std::abs(enemyPosition.x - playerPosition.x) +
+                             std::abs(enemyPosition.y - playerPosition.y);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = static_cast<int>(index);
+        }
     }
 
-    if (flyingEnemy.isAlive()) {
-        placeGlyph(collisionMap, flyingEnemy.getPosition(), 'f');
-    }
-
-    return collisionMap;
+    return bestIndex;
 }
 
-std::string buildWorldStatus(const game::GroundEnemy& groundEnemy,
-                             const game::FlyingEnemy& flyingEnemy) {
-    std::ostringstream status;
-    status << "Ground Enemy ";
+int findClosestFlyingEnemyIndex(const std::vector<game::FlyingEnemy>& flyingEnemies,
+                                const game::Position& playerPosition) {
+    int bestIndex = -1;
+    int bestDistance = 1000000;
 
-    if (groundEnemy.shouldDespawn()) {
-        status << "cleared";
-    } else if (groundEnemy.isAlive()) {
-        status << "active";
-    } else {
-        status << "dying";
+    for (size_t index = 0; index < flyingEnemies.size(); ++index) {
+        if (!flyingEnemies[index].isAlive()) {
+            continue;
+        }
+
+        const game::Position enemyPosition = flyingEnemies[index].getPosition();
+        const int distance = std::abs(enemyPosition.x - playerPosition.x) +
+                             std::abs(enemyPosition.y - playerPosition.y);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = static_cast<int>(index);
+        }
     }
 
-    status << " | HP " << groundEnemy.getStats().health.current << "/" << groundEnemy.getStats().health.maximum;
-    status << " || Flying Enemy ";
-
-    if (flyingEnemy.shouldDespawn()) {
-        status << "cleared";
-    } else if (flyingEnemy.isAlive()) {
-        status << "active";
-    } else {
-        status << "dying";
-    }
-
-    status << " | HP " << flyingEnemy.getStats().health.current << "/" << flyingEnemy.getStats().health.maximum << "\n\n";
-    return status.str();
+    return bestIndex;
 }
 
 void spawnFlyingProjectile(const game::FlyingEnemy& enemy,
@@ -421,17 +708,51 @@ void updateEnemyProjectiles(const std::string& terrainMap,
     enemyProjectiles.swap(nextProjectiles);
 }
 
-void resetRuntime(std::string& terrainMap,
-                  game::Position& playerPosition,
-                  game::GroundEnemy& groundEnemy,
-                  game::FlyingEnemy& flyingEnemy,
-                  std::vector<EnemyProjectile>& enemyProjectiles,
-                  Player& player) {
-    terrainMap = buildTerrainMap(kMainTerrainWithPlayer, playerPosition);
-    groundEnemy = game::GroundEnemy("main_ground_enemy", kGroundEnemySpawnPosition);
-    flyingEnemy = game::FlyingEnemy("main_flying_enemy", kFlyingEnemySpawnPosition);
-    enemyProjectiles.clear();
-    player.resetRuntimeState();
+void removeDefeatedEnemies(std::vector<game::GroundEnemy>& groundEnemies,
+                           std::vector<game::FlyingEnemy>& flyingEnemies) {
+    std::vector<game::GroundEnemy> livingGround;
+    for (size_t index = 0; index < groundEnemies.size(); ++index) {
+        if (!groundEnemies[index].shouldDespawn()) {
+            livingGround.push_back(groundEnemies[index]);
+        }
+    }
+    groundEnemies.swap(livingGround);
+
+    std::vector<game::FlyingEnemy> livingFlying;
+    for (size_t index = 0; index < flyingEnemies.size(); ++index) {
+        if (!flyingEnemies[index].shouldDespawn()) {
+            livingFlying.push_back(flyingEnemies[index]);
+        }
+    }
+    flyingEnemies.swap(livingFlying);
+}
+
+std::string buildWorldStatus(const game::MapDefinition& mapDefinition,
+                             const game::SaveData& saveData,
+                             size_t loadedMapCount,
+                             const RuntimeState& state,
+                             const std::vector<game::GroundEnemy>& groundEnemies,
+                             const std::vector<game::FlyingEnemy>& flyingEnemies,
+                             const std::vector<EnemyProjectile>& enemyProjectiles) {
+    std::ostringstream status;
+    status << "[Main World] ESC exit | P reset room\n";
+    status << "Map " << mapDefinition.displayName
+           << " | Loaded Maps " << loadedMapCount
+           << " | Ground " << groundEnemies.size()
+           << " | Flying " << flyingEnemies.size()
+           << " | Projectiles " << enemyProjectiles.size() << "\n";
+    status << "Save Map " << saveData.currentMapId
+           << " | Respawn " << saveData.respawnMapId
+           << " | Shop " << (state.shopOpen ? "OPEN" : "OFF") << "\n";
+    status << "Prompt: " << state.prompt << "\n";
+    status << "Last Interaction: " << state.lastInteraction << "\n";
+    if (state.shopOpen) {
+        status << "[Merchant Placeholder]\n";
+        status << "- Merchant UI pending\n";
+        status << "- Press E to close\n";
+    }
+    status << "\n";
+    return status.str();
 }
 
 } // namespace
@@ -440,117 +761,212 @@ int main() {
     MapDrawer mapDrawer;
     KeyStateManager keyStateManager;
     Player player(keyStateManager);
+    game::MapLoader mapLoader;
+    RuntimeState state;
+    game::SaveData saveData;
     std::string terrainMap;
     game::Position playerPosition;
-    game::GroundEnemy groundEnemy;
-    game::FlyingEnemy flyingEnemy;
+    std::vector<game::GroundEnemy> groundEnemies;
+    std::vector<game::FlyingEnemy> flyingEnemies;
     std::vector<EnemyProjectile> enemyProjectiles;
+    game::GroundEnemy dummyGroundEnemy("dummy_ground", game::Position(-100, -100));
+    game::FlyingEnemy dummyFlyingEnemy("dummy_flying", game::Position(-100, -100));
+    const size_t loadedMapCount = mapLoader.loadAllMaps().size();
+    game::MapDefinition currentMapDefinition;
 
     if (!runTitleScreen(mapDrawer, keyStateManager)) {
         return 0;
     }
 
-    resetRuntime(terrainMap, playerPosition, groundEnemy, flyingEnemy, enemyProjectiles, player);
+    player.resetRuntimeState();
+    currentMapDefinition = mapLoader.loadMap("spawn_village");
+    loadMapState(currentMapDefinition,
+                 "player_start",
+                 state,
+                 saveData,
+                 terrainMap,
+                 playerPosition,
+                 groundEnemies,
+                 flyingEnemies,
+                 enemyProjectiles);
 
     while (true) {
         keyStateManager.clearKeys();
         keyStateManager.readKeys();
 
-        if (keyStateManager.keyStates[0x1B]) {
+        if (isKeyDown(keyStateManager, 0x1B)) {
             break;
         }
 
-        if (keyStateManager.keyStates['p'] || keyStateManager.keyStates['P']) {
-            resetRuntime(terrainMap, playerPosition, groundEnemy, flyingEnemy, enemyProjectiles, player);
+        if (isJustPressed(keyStateManager, state.previousKeys, 'p') ||
+            isJustPressed(keyStateManager, state.previousKeys, 'P')) {
+            player.resetRuntimeState();
+            currentMapDefinition = mapLoader.loadMap(state.currentMapId);
+            loadMapState(currentMapDefinition,
+                         state.currentSpawnPointId,
+                         state,
+                         saveData,
+                         terrainMap,
+                         playerPosition,
+                         groundEnemies,
+                         flyingEnemies,
+                         enemyProjectiles);
+            state.lastInteraction = "Room reset.";
         }
 
-        std::string collisionMap = buildCollisionMap(terrainMap, playerPosition, groundEnemy, flyingEnemy);
-        if (player.isAlive() && !player.isMovementLocked()) {
-            player.move(collisionMap);
-            const game::Position movedPlayerPosition = findGlyphPosition(collisionMap, '@');
-            if (movedPlayerPosition.x >= 0 && movedPlayerPosition.y >= 0) {
-                playerPosition = movedPlayerPosition;
+        updatePrompt(currentMapDefinition, playerPosition, state);
+
+        if (isJustPressed(keyStateManager, state.previousKeys, 'e') ||
+            isJustPressed(keyStateManager, state.previousKeys, 'E')) {
+            if (state.shopOpen) {
+                state.shopOpen = false;
+                state.lastInteraction = "Closed interaction panel.";
+            } else {
+                const game::NpcPlacement* npcPlacement = findInteractableNpc(currentMapDefinition, playerPosition);
+                if (npcPlacement != 0) {
+                    const RuntimeNpcInfo npcInfo = getNpcInfo(npcPlacement->npcId);
+                    state.lastInteraction = npcInfo.displayName + ": " + npcInfo.interactionText;
+                    state.shopOpen = npcInfo.opensShop;
+                } else {
+                    const game::MapTransition* transition = findInteractableTransition(currentMapDefinition, playerPosition);
+                    if (transition != 0) {
+                        currentMapDefinition = mapLoader.loadMap(transition->toMapId);
+                        loadMapState(currentMapDefinition,
+                                     transition->spawnPointId,
+                                     state,
+                                     saveData,
+                                     terrainMap,
+                                     playerPosition,
+                                     groundEnemies,
+                                     flyingEnemies,
+                                     enemyProjectiles);
+                        state.lastInteraction = "Entered " + currentMapDefinition.displayName + ".";
+                    }
+                }
+            }
+        }
+
+        if (!state.shopOpen) {
+            std::string collisionMap = buildCollisionMap(terrainMap,
+                                                         playerPosition,
+                                                         currentMapDefinition,
+                                                         groundEnemies,
+                                                         flyingEnemies);
+            if (player.isAlive() && !player.isMovementLocked()) {
+                player.move(collisionMap);
+                const game::Position movedPlayerPosition = findGlyphPosition(collisionMap, '@');
+                if (movedPlayerPosition.x >= 0 && movedPlayerPosition.y >= 0) {
+                    playerPosition = movedPlayerPosition;
+                }
             }
         }
 
         std::string gameplayMap = terrainMap;
         placeGlyph(gameplayMap, playerPosition, '@');
 
-        player.updateCombat(gameplayMap, groundEnemy, flyingEnemy);
+        const int activeGroundEnemyIndex = findClosestGroundEnemyIndex(groundEnemies, playerPosition);
+        const int activeFlyingEnemyIndex = findClosestFlyingEnemyIndex(flyingEnemies, playerPosition);
 
-        if (groundEnemy.isRenderable() && player.isAlive()) {
-            const game::Position previousPosition = groundEnemy.getPosition();
-            groundEnemy.updateAI(playerPosition, static_cast<float>(kFrameMs) / 1000.0f);
-            const game::Position nextPosition = groundEnemy.getPosition();
+        if (activeGroundEnemyIndex >= 0 && activeFlyingEnemyIndex >= 0) {
+            player.updateCombat(gameplayMap,
+                                groundEnemies[static_cast<size_t>(activeGroundEnemyIndex)],
+                                flyingEnemies[static_cast<size_t>(activeFlyingEnemyIndex)]);
+        } else if (activeGroundEnemyIndex >= 0) {
+            player.updateCombat(gameplayMap,
+                                groundEnemies[static_cast<size_t>(activeGroundEnemyIndex)],
+                                dummyFlyingEnemy);
+        } else if (activeFlyingEnemyIndex >= 0) {
+            player.updateCombat(gameplayMap,
+                                dummyGroundEnemy,
+                                flyingEnemies[static_cast<size_t>(activeFlyingEnemyIndex)]);
+        } else {
+            player.updateCombat(gameplayMap, dummyGroundEnemy, dummyFlyingEnemy);
+        }
 
-            if (groundEnemy.isAlive() &&
+        for (size_t index = 0; index < groundEnemies.size(); ++index) {
+            const game::Position previousPosition = groundEnemies[index].getPosition();
+            groundEnemies[index].updateAI(playerPosition, static_cast<float>(kFrameMs) / 1000.0f);
+            const game::Position nextPosition = groundEnemies[index].getPosition();
+
+            if (groundEnemies[index].isAlive() &&
                 (nextPosition.x != previousPosition.x || nextPosition.y != previousPosition.y) &&
-                !canEnemyOccupy(terrainMap, playerPosition, nextPosition, flyingEnemy.getPosition(), flyingEnemy.isAlive())) {
-                groundEnemy.setPosition(previousPosition);
+                !canEnemyOccupy(terrainMap,
+                                playerPosition,
+                                groundEnemies,
+                                flyingEnemies,
+                                nextPosition,
+                                true,
+                                static_cast<int>(index))) {
+                groundEnemies[index].setPosition(previousPosition);
             }
 
-            if (groundEnemy.consumeAttackTrigger()) {
-                if (groundEnemy.isTouchingPlayer(playerPosition) || groundEnemy.isInAttackRange(playerPosition)) {
+            if (player.isAlive() && groundEnemies[index].consumeAttackTrigger()) {
+                if (groundEnemies[index].isTouchingPlayer(playerPosition) ||
+                    groundEnemies[index].isInAttackRange(playerPosition)) {
                     player.receiveDamage("Ground enemy", playerPosition);
                 }
             }
         }
 
-        if (flyingEnemy.isRenderable() && player.isAlive()) {
-            const game::Position previousPosition = flyingEnemy.getPosition();
-            flyingEnemy.updateAI(playerPosition, static_cast<float>(kFrameMs) / 1000.0f);
-            const game::Position nextPosition = flyingEnemy.getPosition();
+        for (size_t index = 0; index < flyingEnemies.size(); ++index) {
+            const game::Position previousPosition = flyingEnemies[index].getPosition();
+            flyingEnemies[index].updateAI(playerPosition, static_cast<float>(kFrameMs) / 1000.0f);
+            const game::Position nextPosition = flyingEnemies[index].getPosition();
 
-            if (flyingEnemy.isAlive() &&
+            if (flyingEnemies[index].isAlive() &&
                 (nextPosition.x != previousPosition.x || nextPosition.y != previousPosition.y) &&
-                !canEnemyOccupy(terrainMap, playerPosition, nextPosition, groundEnemy.getPosition(), groundEnemy.isAlive())) {
-                flyingEnemy.setPosition(previousPosition);
+                !canEnemyOccupy(terrainMap,
+                                playerPosition,
+                                groundEnemies,
+                                flyingEnemies,
+                                nextPosition,
+                                false,
+                                static_cast<int>(index))) {
+                flyingEnemies[index].setPosition(previousPosition);
             }
 
-            if (flyingEnemy.consumeProjectileTrigger()) {
-                spawnFlyingProjectile(flyingEnemy, playerPosition, enemyProjectiles);
+            if (flyingEnemies[index].consumeProjectileTrigger()) {
+                spawnFlyingProjectile(flyingEnemies[index], playerPosition, enemyProjectiles);
             }
         }
 
         updateEnemyProjectiles(terrainMap, playerPosition, enemyProjectiles, player);
+        removeDefeatedEnemies(groundEnemies, flyingEnemies);
 
-        std::string renderMap = terrainMap;
-        if (groundEnemy.isRenderable()) {
-            const game::Position enemyPosition = groundEnemy.getPosition();
-            placeGlyph(renderMap, enemyPosition, groundEnemy.getRenderGlyph());
-
-            if (groundEnemy.getState() == game::GroundEnemyState::AttackStartup) {
-                const game::Position warningRow(enemyPosition.x, enemyPosition.y - 1);
-                placeGlyph(renderMap, game::Position(warningRow.x - 1, warningRow.y), '!');
-                placeGlyph(renderMap, warningRow, '!');
-                placeGlyph(renderMap, game::Position(warningRow.x + 1, warningRow.y), '!');
-            }
-        }
-
-        if (flyingEnemy.isRenderable()) {
-            const game::Position enemyPosition = flyingEnemy.getPosition();
-            placeGlyph(renderMap, enemyPosition, flyingEnemy.getRenderGlyph());
-
-            if (flyingEnemy.getState() == game::FlyingEnemyState::AttackStartup) {
-                const game::Position warningRow(enemyPosition.x, enemyPosition.y - 1);
-                placeGlyph(renderMap, game::Position(warningRow.x - 1, warningRow.y), '!');
-                placeGlyph(renderMap, warningRow, '!');
-                placeGlyph(renderMap, game::Position(warningRow.x + 1, warningRow.y), '!');
-            }
-        }
-
-        for (size_t index = 0; index < enemyProjectiles.size(); ++index) {
-            placeGlyph(renderMap, enemyProjectiles[index].position, '*');
-        }
-
+        std::string renderMap = buildRenderMap(terrainMap,
+                                               playerPosition,
+                                               currentMapDefinition,
+                                               groundEnemies,
+                                               flyingEnemies,
+                                               enemyProjectiles);
         player.overlayRender(renderMap, gameplayMap);
-        mapDrawer.currentmap = player.buildHud() + buildWorldStatus(groundEnemy, flyingEnemy) + renderMap;
+        mapDrawer.currentmap = player.buildHud() +
+                               buildWorldStatus(currentMapDefinition,
+                                                saveData,
+                                                loadedMapCount,
+                                                state,
+                                                groundEnemies,
+                                                flyingEnemies,
+                                                enemyProjectiles) +
+                               renderMap;
         mapDrawer.draw();
 
         if (player.consumeResetRequest()) {
-            resetRuntime(terrainMap, playerPosition, groundEnemy, flyingEnemy, enemyProjectiles, player);
+            player.resetRuntimeState();
+            currentMapDefinition = mapLoader.loadMap(state.currentMapId);
+            loadMapState(currentMapDefinition,
+                         state.currentSpawnPointId,
+                         state,
+                         saveData,
+                         terrainMap,
+                         playerPosition,
+                         groundEnemies,
+                         flyingEnemies,
+                         enemyProjectiles);
+            state.lastInteraction = "Respawned in current room.";
         }
 
+        state.previousKeys = keyStateManager.keyStates;
         std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
     }
 

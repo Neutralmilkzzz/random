@@ -20,7 +20,7 @@
 
 | 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| player | 跳跃起跳 | jump_initial_upward_speed | 15.7 | 速度 | 按下跳跃键后的初始上升速度 |
+| player | 跳跃起跳 | jump_initial_upward_speed | 17.11 | 速度 | 按下跳跃键后的初始上升速度；本轮上调约 40% 以适配更高平台 |
 | player | 跳跃起跳 | jump_initial_hold_time | 0.2 | 秒 | 起跳后先保持上升的时长 |
 | player | 跳跃重力 | jump_velocity_drop_step | 0.95 | 速度/步 | 每个离散步长的速度降低值 |
 | player | 跳跃重力 | jump_velocity_drop_interval | 0.02 | 秒 | 速度降低的结算间隔 |
