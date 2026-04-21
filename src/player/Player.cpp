@@ -1,6 +1,7 @@
 #include "player/Player.h"
 
 #include <algorithm>
+#include <iomanip>
 #include <sstream>
 
 #include "enemy/Enemy.h"
@@ -11,12 +12,16 @@ const float kFixedDeltaSeconds = 0.016f;
 const float kRunSpeed = 10.79f;
 const float kAirMoveSpeed = 10.79f;
 const float kInitialJumpUpwardSpeed = 17.11f;
+const float kDoubleJumpUpwardSpeed = 15.85f;
 const float kJumpInitialHoldTime = 0.2f;
 const float kJumpVelocityDropStep = 0.95f;
 const float kJumpVelocityDropInterval = 0.02f;
 const float kMinimumJumpRiseTime = 0.08f;
 const float kFallSpeedCap = 20.9f;
 const float kGravityAcceleration = kJumpVelocityDropStep / kJumpVelocityDropInterval;
+const float kDashSpeed = 34.0f;
+const int kDashFrames = 8;
+const int kDashCooldownFrames = 18;
 
 const int kBlinkFrames = 125;
 const int kHealLockoutFrames = 188;
@@ -34,6 +39,30 @@ const int kSoulMeterMax = 99;
 const int kSoulGainOnBasicHit = 11;
 const int kSoulSkillCost = 33;
 const int kPlayerAttackDamage = 1;
+const int kSoulFillUnits = 3;
+
+int digitCount(int value) {
+    int clampedValue = std::max(0, value);
+    int digits = 1;
+    while (clampedValue >= 10) {
+        clampedValue /= 10;
+        digits++;
+    }
+    return digits;
+}
+
+std::string buildSoulReadoutLine(const game::CharacterStats& stats) {
+    const int displayMaximum = std::max(0, stats.soul.maximum);
+    const int displayCurrent = std::max(0, std::min(stats.soul.current, displayMaximum));
+    const int width = digitCount(std::max(displayMaximum, kSoulMeterMax));
+
+    std::ostringstream line;
+    line << "   "
+         << std::setw(width) << displayCurrent
+         << "/"
+         << std::setw(width) << displayMaximum;
+    return line.str();
+}
 
 int deathAnimationTotalFrames() {
     return kDeathFreezeFrames +
@@ -93,19 +122,49 @@ void placeText(std::string& map, const game::Position& startPosition, const std:
     }
 }
 
+bool moveHorizontallyOneTile(std::string& currentmap, int dx) {
+    const size_t pos = currentmap.find('@');
+    if (pos == std::string::npos || dx == 0) {
+        return false;
+    }
+
+    if (dx < 0) {
+        if (pos == 0 || currentmap[pos - 1] != ' ') {
+            return false;
+        }
+        std::swap(currentmap[pos], currentmap[pos - 1]);
+        return true;
+    }
+
+    if (pos + 1 >= currentmap.length() || currentmap[pos + 1] != ' ') {
+        return false;
+    }
+
+    std::swap(currentmap[pos], currentmap[pos + 1]);
+    return true;
+}
+
 } // namespace
 
 Player::Player(KeyStateManager& keyStateManager)
     : ksm(keyStateManager),
       isJumping(false),
       jumpHeldLastFrame(false),
+      doubleJumpUnlocked(true),
+      airJumpAvailable(true),
+      dashActive(false),
+      dashAvailable(true),
       horizontalMoveAccumulator(0.0f),
       verticalMoveAccumulator(0.0f),
+      dashMoveAccumulator(0.0f),
       upwardVelocity(0.0f),
       downwardVelocity(0.0f),
       jumpHoldRemaining(0.0f),
       minimumJumpRiseRemaining(0.0f),
       riseVelocityDropAccumulator(0.0f),
+      dashFramesRemaining(0),
+      dashCooldownFrames(0),
+      dashDirection(1),
       facing(game::FacingDirection::Right),
       framesSinceLastDamage(kHealLockoutFrames),
       blinkFramesRemaining(0),
@@ -123,6 +182,22 @@ void Player::resetRuntimeState() {
     stats = game::CharacterStats();
     stats.soul.maximum = kSoulMeterMax;
     stats.soul.current = 0;
+    isJumping = false;
+    jumpHeldLastFrame = false;
+    airJumpAvailable = doubleJumpUnlocked;
+    dashActive = false;
+    dashAvailable = true;
+    horizontalMoveAccumulator = 0.0f;
+    verticalMoveAccumulator = 0.0f;
+    dashMoveAccumulator = 0.0f;
+    upwardVelocity = 0.0f;
+    downwardVelocity = 0.0f;
+    jumpHoldRemaining = 0.0f;
+    minimumJumpRiseRemaining = 0.0f;
+    riseVelocityDropAccumulator = 0.0f;
+    dashFramesRemaining = 0;
+    dashCooldownFrames = 0;
+    dashDirection = 1;
     hitFeedback = game::HitFeedbackState();
     hitFeedback.blinking = false;
     facing = game::FacingDirection::Right;
@@ -141,7 +216,7 @@ void Player::resetRuntimeState() {
     projectiles.clear();
     previousKeys.clear();
     lastAction = "Ready";
-    lastResult = "Move with A/D, jump with SPACE, aim with W/S, attack with J, cast with K, heal with R.";
+    lastResult = "Move with A/D, jump with SPACE, dash with SHIFT.";
     resetQueued = false;
 }
 
@@ -205,12 +280,21 @@ void Player::move(std::string& currentmap) {
     const bool movingRight = isKeyDown('d') || isKeyDown('D');
     const bool jumpHeld = isKeyDown(' ');
     const bool jumpJustPressed = jumpHeld && !jumpHeldLastFrame;
+    const bool dashJustPressed = isJustPressed(0x10);
 
     bool grounded = isGrounded(currentmap, pos);
+
+    if (dashCooldownFrames > 0) {
+        dashCooldownFrames--;
+    }
 
     if (grounded && !isJumping && upwardVelocity <= 0.0f) {
         downwardVelocity = 0.0f;
         verticalMoveAccumulator = 0.0f;
+        airJumpAvailable = true;
+        if (!dashActive && dashCooldownFrames <= 0) {
+            dashAvailable = true;
+        }
     }
 
     if (jumpJustPressed && grounded) {
@@ -221,7 +305,65 @@ void Player::move(std::string& currentmap) {
         minimumJumpRiseRemaining = kMinimumJumpRiseTime;
         riseVelocityDropAccumulator = 0.0f;
         verticalMoveAccumulator = 0.0f;
+        dashActive = false;
+        dashFramesRemaining = 0;
+        dashMoveAccumulator = 0.0f;
         grounded = false;
+    } else if (jumpJustPressed && !grounded && doubleJumpUnlocked && airJumpAvailable && !dashActive) {
+        isJumping = true;
+        upwardVelocity = kDoubleJumpUpwardSpeed;
+        downwardVelocity = 0.0f;
+        jumpHoldRemaining = kJumpInitialHoldTime;
+        minimumJumpRiseRemaining = kMinimumJumpRiseTime;
+        riseVelocityDropAccumulator = 0.0f;
+        verticalMoveAccumulator = 0.0f;
+        airJumpAvailable = false;
+        lastAction = "Double Jump";
+        lastResult = "Air jump triggered.";
+    }
+
+    if (dashJustPressed && dashAvailable && !dashActive) {
+        dashDirection = movingLeft == movingRight
+                ? (facing == game::FacingDirection::Left ? -1 : 1)
+                : (movingLeft ? -1 : 1);
+        dashActive = true;
+        dashAvailable = false;
+        dashFramesRemaining = kDashFrames;
+        dashCooldownFrames = kDashCooldownFrames;
+        dashMoveAccumulator = 0.0f;
+        isJumping = false;
+        upwardVelocity = 0.0f;
+        downwardVelocity = 0.0f;
+        jumpHoldRemaining = 0.0f;
+        minimumJumpRiseRemaining = 0.0f;
+        riseVelocityDropAccumulator = 0.0f;
+        verticalMoveAccumulator = 0.0f;
+        facing = dashDirection < 0 ? game::FacingDirection::Left : game::FacingDirection::Right;
+        lastAction = "Dash";
+        lastResult = dashDirection < 0 ? "Dashed left." : "Dashed right.";
+    }
+
+    if (dashActive) {
+        dashMoveAccumulator += kDashSpeed * kFixedDeltaSeconds;
+        while (dashMoveAccumulator >= 1.0f) {
+            if (!moveHorizontallyOneTile(currentmap, dashDirection)) {
+                dashFramesRemaining = 0;
+                dashMoveAccumulator = 0.0f;
+                break;
+            }
+            dashMoveAccumulator -= 1.0f;
+        }
+
+        if (dashFramesRemaining > 0) {
+            dashFramesRemaining--;
+        }
+        if (dashFramesRemaining <= 0) {
+            dashActive = false;
+            dashMoveAccumulator = 0.0f;
+        }
+
+        jumpHeldLastFrame = jumpHeld;
+        return;
     }
 
     if (movingLeft != movingRight) {
@@ -235,12 +377,10 @@ void Player::move(std::string& currentmap) {
             }
 
             bool moved = false;
-            if (movingLeft && pos > 0 && currentmap[pos - 1] == ' ') {
-                std::swap(currentmap[pos], currentmap[pos - 1]);
-                moved = true;
-            } else if (movingRight && pos + 1 < currentmap.length() && currentmap[pos + 1] == ' ') {
-                std::swap(currentmap[pos], currentmap[pos + 1]);
-                moved = true;
+            if (movingLeft) {
+                moved = moveHorizontallyOneTile(currentmap, -1);
+            } else if (movingRight) {
+                moved = moveHorizontallyOneTile(currentmap, 1);
             }
 
             if (!moved) {
@@ -519,6 +659,17 @@ void Player::restoreSavedStats(const game::CharacterStats& savedStats) {
 
 game::FacingDirection Player::getFacingDirection() const {
     return facing;
+}
+
+void Player::setDoubleJumpUnlocked(bool unlocked) {
+    doubleJumpUnlocked = unlocked;
+    if (!doubleJumpUnlocked) {
+        airJumpAvailable = false;
+    }
+}
+
+bool Player::hasDoubleJumpUnlocked() const {
+    return doubleJumpUnlocked;
 }
 
 std::string Player::buildHud() const {
@@ -995,13 +1146,19 @@ void Player::triggerDeathAnimation(const game::Position& center, const std::stri
     blinkFramesRemaining = 0;
     hitFeedback.blinking = false;
     isJumping = false;
+    airJumpAvailable = false;
+    dashActive = false;
+    dashAvailable = false;
     horizontalMoveAccumulator = 0.0f;
     verticalMoveAccumulator = 0.0f;
+    dashMoveAccumulator = 0.0f;
     upwardVelocity = 0.0f;
     downwardVelocity = 0.0f;
     jumpHoldRemaining = 0.0f;
     minimumJumpRiseRemaining = 0.0f;
     riseVelocityDropAccumulator = 0.0f;
+    dashFramesRemaining = 0;
+    dashCooldownFrames = 0;
     lastAction = "Death";
     lastResult = sourceLabel + " defeated the player.";
 }
@@ -1410,10 +1567,9 @@ std::vector<game::Position> Player::buildDownSlamDamageCells() const {
 }
 
 std::vector<std::string> Player::buildSoulVesselLines() const {
-    const int totalFillUnits = 3;
     const int fillUnits = stats.soul.maximum == 0
             ? 0
-            : (stats.soul.current * totalFillUnits) / stats.soul.maximum;
+            : (stats.soul.current * kSoulFillUnits) / stats.soul.maximum;
 
     char fillGlyph = 'o';
     if (healCast.active) {
@@ -1423,12 +1579,12 @@ std::vector<std::string> Player::buildSoulVesselLines() const {
     }
 
     std::string fill = "   ";
-    if (fillUnits >= 3) {
-        fill = std::string(3, fillGlyph);
+    if (fillUnits >= kSoulFillUnits) {
+        fill = std::string(kSoulFillUnits, fillGlyph);
     } else if (fillUnits == 2) {
         fill = std::string(2, fillGlyph) + " ";
     } else if (fillUnits == 1) {
-        fill = std::string(" ") + fillGlyph + " ";
+        fill = std::string(1, fillGlyph) + "  ";
     }
 
     std::vector<std::string> lines;
@@ -1436,7 +1592,7 @@ std::vector<std::string> Player::buildSoulVesselLines() const {
     lines.push_back("    /-\\");
     lines.push_back("   |" + fill + "|");
     lines.push_back("    \\_/");
-    lines.push_back("   " + std::to_string(stats.soul.current) + "/" + std::to_string(stats.soul.maximum));
+    lines.push_back(buildSoulReadoutLine(stats));
     return lines;
 }
 

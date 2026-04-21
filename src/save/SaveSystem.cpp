@@ -97,6 +97,8 @@ void writeSaveFile(const game::SaveData& saveData) {
     output << "completion_time=" << saveData.completionTimeSeconds << "\n";
     output << "has_active_run=" << (saveData.hasActiveRun ? 1 : 0) << "\n";
     output << "defeated_bosses=" << join(saveData.defeatedBossIds) << "\n";
+    output << "unlocked_shortcuts=" << join(saveData.unlockedShortcutIds) << "\n";
+    output << "unlocked_skills=" << join(saveData.unlockedSkillIds) << "\n";
 }
 
 } // namespace
@@ -110,6 +112,8 @@ SaveData SaveSystem::createNewSave(Difficulty difficulty) const {
     saveData.currentMapId = "spawn_village";
     saveData.respawnMapId = "player_start";
     saveData.defeatedBossIds.clear();
+    saveData.unlockedShortcutIds.clear();
+    saveData.unlockedSkillIds.clear();
     saveData.completionTimeSeconds = 0;
     saveData.hasActiveRun = true;
     return saveData;
@@ -169,6 +173,16 @@ SaveData SaveSystem::load() const {
             saveData.defeatedBossIds.clear();
             if (!value.empty()) {
                 saveData.defeatedBossIds = split(value, ',');
+            }
+        } else if (key == "unlocked_shortcuts") {
+            saveData.unlockedShortcutIds.clear();
+            if (!value.empty()) {
+                saveData.unlockedShortcutIds = split(value, ',');
+            }
+        } else if (key == "unlocked_skills") {
+            saveData.unlockedSkillIds.clear();
+            if (!value.empty()) {
+                saveData.unlockedSkillIds = split(value, ',');
             }
         }
     }

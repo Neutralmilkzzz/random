@@ -4,15 +4,16 @@ type=CombatRoom
 boss_room=false
 
 [spawn_points]
-from_spawn_village,4,15
-from_module_02,61,15
+from_spawn_village,4,14
+from_module_02,61,14
 
 [enemy_spawns]
-ground_enemy_basic,16,15
-ground_enemy_basic,30,15
-flying_enemy_basic,38,9
-ground_enemy_basic,52,15
-flying_enemy_basic,61,7
+ground_enemy_basic,9,11
+ground_enemy_basic,30,11
+flying_enemy_basic,19,7
+ground_enemy_basic,44,9
+ground_enemy_basic,56,10
+flying_enemy_basic,51,4
 
 [npc_placements]
 
@@ -24,19 +25,18 @@ module_01,module_02,from_module_01,58,15
 ============================================================================
 =                                                                          =
 =                                                                          =
-=                            ========                                      =
-=                                                                          =
-=            =========                         ========                    =
-=                                                                          =
-=                                   =========                              =
-=       =========                                                      =====
-=                                                                          =
-=                      =========                      =========            =
-=                                                                          =
-=           =========                         =========                    =
-=                                                                          =
-=                                                       =========          =
-=                                                                          =
+=                                           ===                            =
+=                              ====         ===                            =
+=                 ===                       ===                            =
+=                 ===                                                      =
+=                                    ===         ==========                =
+=                           ============                ===                =
+=                       ===          ===                                   =
+=              ============          ============                          =
+=                       ===          ===            =========              =
+=     ========          ==========   ===                                   =
+=          ===          ===          ===                                   =
+=          ===          ===          ===                                   =
 ============================================================================
 =                                                                          =
 ============================================================================

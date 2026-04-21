@@ -47,6 +47,7 @@ enum class BossAttackType {
     None,
     SweepSlash,
     DashSlash,
+    JumpSlash,
     FireballBurst,
     MeteorDrop
 };
@@ -54,14 +55,45 @@ enum class BossAttackType {
 struct BossAttackSignal {
     BossAttackType type;
     Position origin;
+    Position targetPosition;
     FacingDirection facingDirection;
 
     BossAttackSignal(BossAttackType attackType = BossAttackType::None,
                      const Position& attackOrigin = Position(),
+                     const Position& attackTargetPosition = Position(-1, -1),
                      FacingDirection facing = FacingDirection::Right)
         : type(attackType),
           origin(attackOrigin),
+          targetPosition(attackTargetPosition),
           facingDirection(facing) {
+    }
+};
+
+struct BossVisualGlyph {
+    Position position;
+    char glyph;
+
+    BossVisualGlyph(const Position& glyphPosition = Position(), char glyphValue = ' ')
+        : position(glyphPosition),
+          glyph(glyphValue) {
+    }
+};
+
+struct BossAttackVisual {
+    std::vector<BossVisualGlyph> activeGlyphs;
+    std::vector<BossVisualGlyph> fadeGlyphs;
+    std::vector<Position> damageCells;
+    Position landingPosition;
+    int activeFrames;
+    int fadeFrames;
+    bool hasLandingPosition;
+    std::string label;
+
+    BossAttackVisual()
+        : landingPosition(-1, -1),
+          activeFrames(0),
+          fadeFrames(0),
+          hasLandingPosition(false) {
     }
 };
 
@@ -223,11 +255,19 @@ public:
     bool shouldDespawn() const;
     char getRenderGlyph() const;
     bool consumeAttackSignal(BossAttackSignal& signal);
+    bool consumeDefeatReward(RewardResolution& reward);
+    bool hasEncounterStarted() const;
+    bool isCombatActive() const;
     bool isStaggered() const;
     int getStaggerThreshold() const;
     int getStaggerDamage() const;
     bool isStaggerWindowActive() const;
     float getStaggerWindowRemaining() const;
+    BossAttackType getStartupAttackType() const;
+    Position getStartupTargetPosition() const;
+    std::vector<BossVisualGlyph> buildBodyVisual() const;
+    std::vector<BossVisualGlyph> buildStartupVisual() const;
+    BossAttackVisual buildResolvedAttackVisual(const BossAttackSignal& signal) const;
     bool shouldEnterStagger() const;
     void resetStaggerMeter();
     virtual AttackDefinition getAttackForType(BossAttackType attackType) const = 0;
@@ -245,7 +285,10 @@ protected:
     bool isWithinHorizontalRange(const Position& targetPosition, float range) const;
     bool isWithinVerticalRange(const Position& targetPosition, float range) const;
     void wakeUp(float introSeconds);
-    void startAttack(BossAttackType attackType, float startupSeconds, float recoverySeconds);
+    void startAttack(BossAttackType attackType,
+                     float startupSeconds,
+                     float recoverySeconds,
+                     const Position& targetPosition = Position(-1, -1));
     void enterStagger(float staggerSeconds);
     void finishRecovery();
 
@@ -274,8 +317,14 @@ protected:
     int staggerThreshold;
     int damageTakenSinceLastStagger;
     TimedWindow staggerWindow;
+    RewardResolution pendingDefeatReward;
+    bool defeatRewardQueued;
     BossAttackType startupAttackType;
+    Position startupTargetPosition;
+    float startupDurationSeconds;
     float startupRecoverySeconds;
+    float staggerDurationSeconds;
+    float visualElapsedSeconds;
 };
 
 class MeleeBoss : public Boss {
@@ -297,6 +346,7 @@ private:
     float loseAggroRange;
     float slashRange;
     float dashRange;
+    float jumpSlashRange;
     float introSeconds;
     float attackStartupSeconds;
     float attackRecoverySeconds;

@@ -44,6 +44,16 @@ enum class SandboxBossType {
     Ranged
 };
 
+struct GlyphCell {
+    game::Position position;
+    char glyph;
+
+    GlyphCell(const game::Position& cellPosition = game::Position(), char cellGlyph = ' ')
+        : position(cellPosition),
+          glyph(cellGlyph) {
+    }
+};
+
 struct BossProjectile {
     game::Position position;
     int dx;
@@ -60,19 +70,23 @@ struct BossProjectile {
 };
 
 struct BossImpact {
-    std::vector<game::Position> cells;
-    int remainingFrames;
-    char glyph;
+    std::vector<GlyphCell> activeGlyphs;
+    std::vector<GlyphCell> fadeGlyphs;
+    std::vector<game::Position> damageCells;
+    int activeFramesRemaining;
+    int fadeFramesRemaining;
     std::string label;
 
     BossImpact()
-        : remainingFrames(0),
-          glyph('*') {
+        : activeFramesRemaining(0),
+          fadeFramesRemaining(0) {
     }
 };
 
 struct MeteorStrike {
-    std::vector<game::Position> cells;
+    std::vector<GlyphCell> warningGlyphs;
+    std::vector<GlyphCell> blastGlyphs;
+    std::vector<game::Position> damageCells;
     int warningFramesRemaining;
     int blastFramesRemaining;
     bool damageResolved;
@@ -186,6 +200,33 @@ void placeGlyph(std::string& map, const game::Position& position, char glyph) {
     map[indexFromPosition(map, position)] = glyph;
 }
 
+void placeGlyphCells(std::string& map, const std::vector<GlyphCell>& glyphs) {
+    for (size_t index = 0; index < glyphs.size(); ++index) {
+        placeGlyph(map, glyphs[index].position, glyphs[index].glyph);
+    }
+}
+
+GlyphCell toGlyphCell(const game::BossVisualGlyph& glyph) {
+    return GlyphCell(glyph.position, glyph.glyph);
+}
+
+BossImpact toBossImpact(const game::BossAttackVisual& visual) {
+    BossImpact impact;
+    impact.damageCells = visual.damageCells;
+    impact.activeFramesRemaining = visual.activeFrames;
+    impact.fadeFramesRemaining = visual.fadeFrames;
+    impact.label = visual.label;
+
+    for (size_t index = 0; index < visual.activeGlyphs.size(); ++index) {
+        impact.activeGlyphs.push_back(toGlyphCell(visual.activeGlyphs[index]));
+    }
+    for (size_t index = 0; index < visual.fadeGlyphs.size(); ++index) {
+        impact.fadeGlyphs.push_back(toGlyphCell(visual.fadeGlyphs[index]));
+    }
+
+    return impact;
+}
+
 game::Boss& getBoss(SandboxBoss& boss) {
     return boss.type == SandboxBossType::Melee
             ? static_cast<game::Boss&>(boss.meleeBoss)
@@ -259,9 +300,10 @@ std::string buildRenderMap(const std::string& terrainMap,
     std::string renderMap = terrainMap;
 
     for (size_t index = 0; index < state.impacts.size(); ++index) {
-        for (size_t cellIndex = 0; cellIndex < state.impacts[index].cells.size(); ++cellIndex) {
-            placeGlyph(renderMap, state.impacts[index].cells[cellIndex], state.impacts[index].glyph);
-        }
+        placeGlyphCells(renderMap,
+                        state.impacts[index].activeFramesRemaining > 0
+                                ? state.impacts[index].activeGlyphs
+                                : state.impacts[index].fadeGlyphs);
     }
 
     for (size_t index = 0; index < state.projectiles.size(); ++index) {
@@ -269,22 +311,24 @@ std::string buildRenderMap(const std::string& terrainMap,
     }
 
     for (size_t index = 0; index < state.meteors.size(); ++index) {
-        const char glyph = state.meteors[index].warningFramesRemaining > 0 ? '^' : '*';
-        for (size_t cellIndex = 0; cellIndex < state.meteors[index].cells.size(); ++cellIndex) {
-            placeGlyph(renderMap, state.meteors[index].cells[cellIndex], glyph);
-        }
+        placeGlyphCells(renderMap,
+                        state.meteors[index].warningFramesRemaining > 0
+                                ? state.meteors[index].warningGlyphs
+                                : state.meteors[index].blastGlyphs);
     }
 
     if (boss.active && getBoss(boss).isRenderable()) {
         const game::Boss& activeBoss = getBoss(boss);
-        const game::Position bossPosition = activeBoss.getPosition();
-        placeGlyph(renderMap, bossPosition, activeBoss.getRenderGlyph());
+        const std::vector<game::BossVisualGlyph> bodyVisual = activeBoss.buildBodyVisual();
+        for (size_t index = 0; index < bodyVisual.size(); ++index) {
+            placeGlyph(renderMap, bodyVisual[index].position, bodyVisual[index].glyph);
+        }
 
         if (activeBoss.getState() == game::BossState::AttackStartup) {
-            const game::Position warningRow(bossPosition.x, bossPosition.y - 1);
-            placeGlyph(renderMap, game::Position(warningRow.x - 1, warningRow.y), '!');
-            placeGlyph(renderMap, warningRow, '!');
-            placeGlyph(renderMap, game::Position(warningRow.x + 1, warningRow.y), '!');
+            const std::vector<game::BossVisualGlyph> startupVisual = activeBoss.buildStartupVisual();
+            for (size_t index = 0; index < startupVisual.size(); ++index) {
+                placeGlyph(renderMap, startupVisual[index].position, startupVisual[index].glyph);
+            }
         }
     }
 
@@ -297,7 +341,7 @@ std::string buildRenderMap(const std::string& terrainMap,
 
 std::string buildHud(const SandboxBoss& boss, const SandboxState& state) {
     std::ostringstream hud;
-    hud << "[BossSandbox] ESC exit | 1 melee boss | 2 ranged boss | H light hit | J heavy hit\n";
+    hud << "[BossSandbox] ESC exit | 1 melee demo | 2 ranged proto | H light hit(1) | J heavy hit(1)\n";
     hud << "R reset | C clear boss | I invincible (" << (state.invincible ? "ON" : "OFF") << ")"
         << " | P freeze AI (" << (state.freezeAi ? "ON" : "OFF") << ")\n";
     hud << "Player HP " << state.playerStats.health.current << "/" << state.playerStats.health.maximum
@@ -366,22 +410,11 @@ void damagePlayer(SandboxState& state, const std::string& sourceLabel) {
     }
 }
 
-std::vector<game::Position> buildFrontArc(const game::Position& origin,
-                                          game::FacingDirection facingDirection,
-                                          int reach) {
-    std::vector<game::Position> cells;
-    for (int step = 1; step <= reach; ++step) {
-        const int direction = facingDirection == game::FacingDirection::Right ? 1 : -1;
-        cells.push_back(game::Position(origin.x + direction * step, origin.y));
-    }
-    return cells;
-}
-
 void applyImpactIfPlayerInside(const BossImpact& impact,
                                const game::Position& playerPosition,
                                SandboxState& state) {
-    for (size_t index = 0; index < impact.cells.size(); ++index) {
-        if (impact.cells[index].x == playerPosition.x && impact.cells[index].y == playerPosition.y) {
+    for (size_t index = 0; index < impact.damageCells.size(); ++index) {
+        if (impact.damageCells[index].x == playerPosition.x && impact.damageCells[index].y == playerPosition.y) {
             damagePlayer(state, impact.label);
             return;
         }
@@ -409,7 +442,20 @@ void spawnMeteorDrop(const std::string& terrainMap,
         }
 
         MeteorStrike strike;
-        strike.cells.push_back(target);
+        strike.damageCells.push_back(target);
+        strike.damageCells.push_back(game::Position(target.x, target.y - 1));
+        strike.warningGlyphs.push_back(GlyphCell(game::Position(target.x - 1, target.y), '^'));
+        strike.warningGlyphs.push_back(GlyphCell(target, '!'));
+        strike.warningGlyphs.push_back(GlyphCell(game::Position(target.x + 1, target.y), '^'));
+        strike.blastGlyphs.push_back(GlyphCell(game::Position(target.x - 1, target.y - 1), '\\'));
+        strike.blastGlyphs.push_back(GlyphCell(game::Position(target.x, target.y - 1), '|'));
+        strike.blastGlyphs.push_back(GlyphCell(game::Position(target.x + 1, target.y - 1), '/'));
+        strike.blastGlyphs.push_back(GlyphCell(game::Position(target.x - 1, target.y), '-'));
+        strike.blastGlyphs.push_back(GlyphCell(target, '*'));
+        strike.blastGlyphs.push_back(GlyphCell(game::Position(target.x + 1, target.y), '-'));
+        strike.blastGlyphs.push_back(GlyphCell(game::Position(target.x - 1, target.y + 1), '/'));
+        strike.blastGlyphs.push_back(GlyphCell(game::Position(target.x, target.y + 1), '|'));
+        strike.blastGlyphs.push_back(GlyphCell(game::Position(target.x + 1, target.y + 1), '\\'));
         state.meteors.push_back(strike);
     }
 }
@@ -419,30 +465,32 @@ void resolveBossSignal(const std::string& terrainMap,
                        SandboxBoss& boss,
                        const game::BossAttackSignal& signal,
                        SandboxState& state) {
-    const game::Boss& activeBoss = getBoss(boss);
+    game::Boss& activeBoss = getBoss(boss);
     state.combatSystem.queueAttack(activeBoss.getAttackForType(signal.type));
 
-    if (signal.type == game::BossAttackType::SweepSlash) {
-        BossImpact impact;
-        impact.cells = buildFrontArc(signal.origin, signal.facingDirection, 2);
-        impact.remainingFrames = kImpactFrames;
-        impact.glyph = '/';
-        impact.label = "Boss sweep slash";
+    const game::BossAttackVisual attackVisual = activeBoss.buildResolvedAttackVisual(signal);
+    if (!attackVisual.activeGlyphs.empty() ||
+        !attackVisual.fadeGlyphs.empty() ||
+        !attackVisual.damageCells.empty()) {
+        BossImpact impact = toBossImpact(attackVisual);
         applyImpactIfPlayerInside(impact, playerPosition, state);
         state.impacts.push_back(impact);
-        state.lastEvent = "Boss released a sweep slash.";
-        return;
-    }
 
-    if (signal.type == game::BossAttackType::DashSlash) {
-        BossImpact impact;
-        impact.cells = buildFrontArc(signal.origin, signal.facingDirection, 4);
-        impact.remainingFrames = kImpactFrames;
-        impact.glyph = '=';
-        impact.label = "Boss dash slash";
-        applyImpactIfPlayerInside(impact, playerPosition, state);
-        state.impacts.push_back(impact);
-        state.lastEvent = "Boss burst forward with a dash slash.";
+        if (attackVisual.hasLandingPosition &&
+            isInsidePlayableArea(terrainMap, attackVisual.landingPosition) &&
+            tileAt(terrainMap, attackVisual.landingPosition) == ' ' &&
+            !(attackVisual.landingPosition.x == playerPosition.x &&
+              attackVisual.landingPosition.y == playerPosition.y)) {
+            activeBoss.setPosition(attackVisual.landingPosition);
+        }
+
+        if (signal.type == game::BossAttackType::SweepSlash) {
+            state.lastEvent = "Boss released a sweep slash.";
+        } else if (signal.type == game::BossAttackType::DashSlash) {
+            state.lastEvent = "Boss burst forward with a dash slash.";
+        } else if (signal.type == game::BossAttackType::JumpSlash) {
+            state.lastEvent = "Boss leapt in with a jump slash.";
+        }
         return;
     }
 
@@ -464,13 +512,17 @@ void updateImpacts(SandboxState& state) {
 
     for (size_t index = 0; index < state.impacts.size(); ++index) {
         BossImpact impact = state.impacts[index];
-        if (impact.remainingFrames <= 0) {
+        if (impact.activeFramesRemaining > 0) {
+            impact.activeFramesRemaining--;
+            nextImpacts.push_back(impact);
             continue;
         }
 
-        impact.remainingFrames--;
-        if (impact.remainingFrames > 0) {
-            nextImpacts.push_back(impact);
+        if (impact.fadeFramesRemaining > 0) {
+            impact.fadeFramesRemaining--;
+            if (impact.fadeFramesRemaining > 0) {
+                nextImpacts.push_back(impact);
+            }
         }
     }
 
@@ -533,9 +585,9 @@ void updateMeteors(const game::Position& playerPosition, SandboxState& state) {
 
         if (!strike.damageResolved) {
             strike.damageResolved = true;
-            for (size_t cellIndex = 0; cellIndex < strike.cells.size(); ++cellIndex) {
-                if (strike.cells[cellIndex].x == playerPosition.x &&
-                    strike.cells[cellIndex].y == playerPosition.y) {
+            for (size_t cellIndex = 0; cellIndex < strike.damageCells.size(); ++cellIndex) {
+                if (strike.damageCells[cellIndex].x == playerPosition.x &&
+                    strike.damageCells[cellIndex].y == playerPosition.y) {
                     damagePlayer(state, "Meteor strike");
                     break;
                 }
@@ -562,7 +614,7 @@ void spawnBoss(SandboxBoss& boss,
 
     if (type == SandboxBossType::Melee) {
         boss.meleeBoss = game::MeleeBoss("melee_boss_1", kMeleeBossSpawn);
-        state.lastEvent = "Spawned melee boss prototype.";
+        state.lastEvent = "Spawned melee boss demo: slash, dash, jump slash.";
     } else {
         boss.rangedBoss = game::RangedBoss("ranged_boss_1", kRangedBossSpawn);
         state.lastEvent = "Spawned ranged boss prototype.";
@@ -595,7 +647,10 @@ void hitBoss(SandboxBoss& boss,
     }
 
     if (resolution.targetDefeated) {
-        const game::RewardResolution reward = state.combatSystem.buildEnemyReward(getBoss(boss));
+        game::RewardResolution reward;
+        if (!getBoss(boss).consumeDefeatReward(reward)) {
+            reward = state.combatSystem.buildEnemyReward(getBoss(boss));
+        }
         state.combatSystem.applyReward(state.playerStats, reward);
         state.totalHkdEarned += reward.hkdGranted;
         state.bossDefeats++;

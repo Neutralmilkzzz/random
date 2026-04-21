@@ -124,15 +124,15 @@ Merchant::Merchant()
     attackOffer.maxPurchaseCount = 2;
     offers.push_back(attackOffer);
 
-    ShopOffer dashOffer;
-    dashOffer.id = "shadow_dash_token";
-    dashOffer.name = "Shadow Dash Token";
-    dashOffer.description = "Reserved mobility unlock. Returns an unlock marker for later wiring.";
-    dashOffer.hkdCost = 90;
-    dashOffer.unlocksSkill = true;
-    dashOffer.unlockedSkill = SkillId::ShadowDash;
-    dashOffer.maxPurchaseCount = 1;
-    offers.push_back(dashOffer);
+    ShopOffer mobilityOffer;
+    mobilityOffer.id = "double_jump_crest";
+    mobilityOffer.name = "Double Jump Crest";
+    mobilityOffer.description = "Unlock one extra air jump after your base jump.";
+    mobilityOffer.hkdCost = 90;
+    mobilityOffer.unlocksSkill = true;
+    mobilityOffer.unlockedSkill = SkillId::DoubleJump;
+    mobilityOffer.maxPurchaseCount = 1;
+    offers.push_back(mobilityOffer);
 }
 
 std::vector<DialogueLine> Merchant::getDialogue() const {
@@ -227,7 +227,7 @@ NpcInteractionResult Merchant::buyOffer(const std::string& offerId, CharacterSta
     if (offer->unlocksSkill) {
         result.unlockedSkillGranted = true;
         result.grantedSkill = offer->unlockedSkill;
-        result.text = "Bought " + offer->name + ". Unlock marker returned; main flow and save hook still pending.";
+        result.text = "Bought " + offer->name + ".";
         return result;
     }
 

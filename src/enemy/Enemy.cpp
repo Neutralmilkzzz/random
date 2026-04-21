@@ -5,6 +5,401 @@
 
 namespace game {
 
+namespace {
+
+const int kBossDefaultHealth = 355;
+const int kRangedBossHealth = 300;
+const int kBossDamagePerHit = 1;
+
+char mirrorBossGlyph(char glyph) {
+    switch (glyph) {
+    case '/':
+        return '\\';
+    case '\\':
+        return '/';
+    case '<':
+        return '>';
+    case '>':
+        return '<';
+    case '[':
+        return ']';
+    case ']':
+        return '[';
+    default:
+        return glyph;
+    }
+}
+
+float computeVisualProgress(float remaining, float total) {
+    if (total <= 0.0f) {
+        return 1.0f;
+    }
+
+    const float elapsed = total - remaining;
+    return std::max(0.0f, std::min(1.0f, elapsed / total));
+}
+
+std::vector<BossVisualGlyph> buildGlyphPattern(const Position& anchor,
+                                               FacingDirection facingDirection,
+                                               const std::vector<std::string>& rows,
+                                               int anchorColumn) {
+    std::vector<BossVisualGlyph> glyphs;
+    for (size_t rowIndex = 0; rowIndex < rows.size(); ++rowIndex) {
+        std::string row = rows[rowIndex];
+        int effectiveAnchor = anchorColumn;
+        if (facingDirection == FacingDirection::Left) {
+            std::reverse(row.begin(), row.end());
+            for (size_t column = 0; column < row.size(); ++column) {
+                row[column] = mirrorBossGlyph(row[column]);
+            }
+            effectiveAnchor = static_cast<int>(row.size()) - 1 - anchorColumn;
+        }
+
+        const int y = anchor.y - static_cast<int>(rows.size()) + 1 + static_cast<int>(rowIndex);
+        for (size_t column = 0; column < row.size(); ++column) {
+            if (row[column] == ' ') {
+                continue;
+            }
+            glyphs.push_back(BossVisualGlyph(Position(anchor.x + static_cast<int>(column) - effectiveAnchor, y),
+                                             row[column]));
+        }
+    }
+    return glyphs;
+}
+
+std::vector<Position> buildBossFrontArc(const Position& origin,
+                                        FacingDirection facingDirection,
+                                        int startOffset,
+                                        int reach) {
+    std::vector<Position> cells;
+    const int direction = facingDirection == FacingDirection::Right ? 1 : -1;
+    for (int step = startOffset; step < startOffset + reach; ++step) {
+        cells.push_back(Position(origin.x + direction * step, origin.y));
+    }
+    return cells;
+}
+
+std::vector<Position> buildBossJumpSlashCells(const Position& targetPosition) {
+    std::vector<Position> cells;
+    for (int dx = -2; dx <= 2; ++dx) {
+        cells.push_back(Position(targetPosition.x + dx, targetPosition.y));
+    }
+    cells.push_back(Position(targetPosition.x, targetPosition.y - 1));
+    cells.push_back(Position(targetPosition.x, targetPosition.y + 1));
+    return cells;
+}
+
+std::vector<std::string> armoredIdlePattern(bool breathing) {
+    if (breathing) {
+        return std::vector<std::string>{
+                "   ___     ",
+                "  /###\\    ",
+                " |#o_o|]   ",
+                " |##_##|   ",
+                "  /   \\    "};
+    }
+
+    return std::vector<std::string>{
+            "   ___     ",
+            "  /###\\    ",
+            " |#o_o|]   ",
+            " |#####|   ",
+            "  /   \\    "};
+}
+
+std::vector<std::string> armoredWalkPattern() {
+    return std::vector<std::string>{
+            "   ___     ",
+            "  /###\\    ",
+            " |#o_o|]   ",
+            " |#####|   ",
+            " _/   \\_   "};
+}
+
+std::vector<std::string> armoredHammerStartupPattern(bool fullyDrawn) {
+    if (fullyDrawn) {
+        return std::vector<std::string>{
+                "   ___ __  ",
+                "  /###\\  ] ",
+                " |#>_<#    ",
+                " |#####|   ",
+                "  /   \\    "};
+    }
+
+    return std::vector<std::string>{
+            "   ___     ",
+            "  /###\\__  ",
+            " |#o_o#]   ",
+            " |#####|   ",
+            "  /   \\    "};
+}
+
+std::vector<std::string> armoredHammerRecoveryPattern(float progress) {
+    if (progress < 0.22f) {
+        return std::vector<std::string>{
+                "   ___     ",
+                "  /###\\    ",
+                " |#>_<|==] ",
+                " |#####|   ",
+                "    *      "};
+    }
+
+    if (progress < 0.55f) {
+        return std::vector<std::string>{
+                "   ___     ",
+                "  /###\\    ",
+                " |#x_x|]   ",
+                " |#####|   ",
+                "   .====>  "};
+    }
+
+    return std::vector<std::string>{
+            "   ___     ",
+            "  /###\\    ",
+            " |#-_-|]   ",
+            " |#####|   ",
+            "   . .     "};
+}
+
+std::vector<std::string> armoredDashStartupPattern(float progress) {
+    if (progress < 0.55f) {
+        return std::vector<std::string>{
+                "   ___     ",
+                "  /###\\    ",
+                " |#o_o|]   ",
+                " |#####|   ",
+                " ===.      "};
+    }
+
+    return std::vector<std::string>{
+            "   ___     ",
+            "  /###\\_   ",
+            " |#>_<|]=  ",
+            " |#####|   ",
+            " =====     "};
+}
+
+std::vector<std::string> armoredDashRecoveryPattern(float progress) {
+    if (progress < 0.25f) {
+        return std::vector<std::string>{
+                "  ___      ",
+                " /###\\__   ",
+                "|#>_<|]==  ",
+                "|#####|    ",
+                " ======    "};
+    }
+
+    if (progress < 0.60f) {
+        return std::vector<std::string>{
+                "   ___     ",
+                "  /###\\    ",
+                " |#x_x|]=  ",
+                " |#####|   ",
+                "  .====    "};
+    }
+
+    return std::vector<std::string>{
+            "   ___     ",
+            "  /###\\    ",
+            " |#-_-|]   ",
+            " |#####|   ",
+            "   . .     "};
+}
+
+std::vector<std::string> armoredJumpStartupPattern(float progress) {
+    if (progress < 0.25f) {
+        return std::vector<std::string>{
+                "   ___     ",
+                "  /###\\    ",
+                " |#o_o|]   ",
+                " |#####|   ",
+                " _/   \\_   "};
+    }
+
+    if (progress < 0.50f) {
+        return std::vector<std::string>{
+                "     ]     ",
+                "   ___     ",
+                "  /###\\    ",
+                " |#o_o#|   ",
+                "   / \\     "};
+    }
+
+    if (progress < 0.78f) {
+        return std::vector<std::string>{
+                "     ]     ",
+                "    _!_    ",
+                "   /###\\   ",
+                "  |#>_<#|  ",
+                "    / \\    "};
+    }
+
+    return std::vector<std::string>{
+            "     ]     ",
+            "   ___     ",
+            "  /###\\    ",
+            " |#x_x#|   ",
+            "  _/ \\_    "};
+}
+
+std::vector<std::string> armoredJumpRecoveryPattern() {
+    return std::vector<std::string>{
+            "   ___     ",
+            "  /###\\    ",
+            " |#-_-|]   ",
+            " |#####|   ",
+            "  /   \\    "};
+}
+
+std::vector<std::string> armoredStaggerPattern(float progress) {
+    if (progress < 0.20f) {
+        return std::vector<std::string>{
+                "   _x_     ",
+                "  /#x#\\    ",
+                " |#x_x|]   ",
+                " |##x##|   ",
+                "  /   \\    "};
+    }
+
+    if (progress < 0.40f) {
+        return std::vector<std::string>{
+                "   _x_     ",
+                "  /# #\\    ",
+                " | x_x |   ",
+                " |##_##|   ",
+                "  /   \\    "};
+    }
+
+    if (progress < 0.68f) {
+        return std::vector<std::string>{
+                "   ___     ",
+                "  /x x\\    ",
+                " |  o  |   ",
+                " |__ __|   ",
+                "  /   \\    "};
+    }
+
+    if (progress < 0.88f) {
+        return std::vector<std::string>{
+                "   ___     ",
+                "  /x x\\    ",
+                " | \\o/ |   ",
+                " |__ __|   ",
+                "  /   \\    "};
+    }
+
+    return std::vector<std::string>{
+            "   _x_     ",
+            "  /###\\    ",
+            " |#o_o|]   ",
+            " |#####|   ",
+            "  /   \\    "};
+}
+
+BossAttackVisual buildBossSweepVisual(const Position& origin, FacingDirection facingDirection) {
+    BossAttackVisual visual;
+    visual.activeFrames = 6;
+    visual.fadeFrames = 4;
+    visual.label = "Hammer shockwave";
+    visual.damageCells = buildBossFrontArc(origin, facingDirection, 1, 6);
+
+    const int direction = facingDirection == FacingDirection::Right ? 1 : -1;
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 2, origin.y - 1), '*'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 0, origin.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 1, origin.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 2, origin.y), '*'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 3, origin.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 4, origin.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 5, origin.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 6, origin.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 7, origin.y),
+                                                  facingDirection == FacingDirection::Right ? '>' : '<'));
+
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 1, origin.y), '.'));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 2, origin.y), '='));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 3, origin.y), '='));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 4, origin.y), '='));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 5, origin.y), '='));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 6, origin.y),
+                                                facingDirection == FacingDirection::Right ? '>' : '<'));
+    return visual;
+}
+
+BossAttackVisual buildBossDashVisual(const Position& origin, FacingDirection facingDirection) {
+    BossAttackVisual visual;
+    visual.activeFrames = 6;
+    visual.fadeFrames = 4;
+    visual.label = "Armored charge";
+    visual.damageCells = buildBossFrontArc(origin, facingDirection, 0, 7);
+
+    const int direction = facingDirection == FacingDirection::Right ? 1 : -1;
+    for (int step = 0; step < 6; ++step) {
+        visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * step, origin.y), '='));
+    }
+
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 1, origin.y), '.'));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 2, origin.y), '='));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 3, origin.y), '='));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 4, origin.y), '='));
+
+    visual.hasLandingPosition = true;
+    visual.landingPosition = Position(origin.x + direction * 4, origin.y);
+    return visual;
+}
+
+BossAttackVisual buildBossJumpSlashVisual(const Position& targetPosition,
+                                          FacingDirection facingDirection) {
+    BossAttackVisual visual;
+    visual.activeFrames = 8;
+    visual.fadeFrames = 4;
+    visual.label = "Jump smash";
+    visual.damageCells = buildBossJumpSlashCells(targetPosition);
+
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x - 1, targetPosition.y - 1), '\\'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x, targetPosition.y - 1), '|'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x + 1, targetPosition.y - 1), '/'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x - 2, targetPosition.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x - 1, targetPosition.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(targetPosition, '*'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x + 1, targetPosition.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x + 2, targetPosition.y), '='));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x - 1, targetPosition.y + 1), '/'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x, targetPosition.y + 1), '|'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x + 1, targetPosition.y + 1), '\\'));
+
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x - 1, targetPosition.y - 1), '.'));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x, targetPosition.y - 1), '|'));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x + 1, targetPosition.y - 1), '.'));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x - 1, targetPosition.y), '.'));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(targetPosition, '='));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(targetPosition.x + 1, targetPosition.y), '.'));
+
+    const int landingOffset = facingDirection == FacingDirection::Right ? -1 : 1;
+    visual.hasLandingPosition = true;
+    visual.landingPosition = Position(targetPosition.x + landingOffset, targetPosition.y);
+    return visual;
+}
+
+BossAttackVisual buildBossStaffVisual(const Position& origin, FacingDirection facingDirection) {
+    BossAttackVisual visual;
+    visual.activeFrames = 5;
+    visual.fadeFrames = 3;
+    visual.label = "Boss staff knockback";
+    visual.damageCells = buildBossFrontArc(origin, facingDirection, 1, 3);
+
+    const int direction = facingDirection == FacingDirection::Right ? 1 : -1;
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction, origin.y), '-'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 2, origin.y), '-'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 3, origin.y), '-'));
+    visual.activeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 2, origin.y + 1), '*'));
+
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction, origin.y), '.'));
+    visual.fadeGlyphs.push_back(BossVisualGlyph(Position(origin.x + direction * 2, origin.y), '-'));
+    return visual;
+}
+
+} // namespace
+
 GroundEnemy::GroundEnemy(const std::string& enemyId, const Position& initialSpawnPosition)
     : id(enemyId),
       position(initialSpawnPosition),
@@ -692,6 +1087,7 @@ Boss::Boss(const std::string& enemyId,
       position(initialSpawnPosition),
       spawnPosition(initialSpawnPosition),
       facingDirection(FacingDirection::Left),
+      hitFeedback(false, 0.0f, 0.0f),
       state(BossState::Dormant),
       alive(true),
       baseRenderGlyph(renderGlyph),
@@ -710,8 +1106,16 @@ Boss::Boss(const std::string& enemyId,
       staggerThreshold(6),
       damageTakenSinceLastStagger(0),
       staggerWindow(false, 5.0f, 0.0f),
+      pendingDefeatReward(),
+      defeatRewardQueued(false),
       startupAttackType(BossAttackType::None),
-      startupRecoverySeconds(0.0f) {
+      startupTargetPosition(-1, -1),
+      startupDurationSeconds(0.0f),
+      startupRecoverySeconds(0.0f),
+      staggerDurationSeconds(0.0f),
+      visualElapsedSeconds(0.0f) {
+    stats.health.current = kBossDefaultHealth;
+    stats.health.maximum = kBossDefaultHealth;
 }
 
 const std::string& Boss::getId() const {
@@ -743,28 +1147,34 @@ void Boss::takeDamage(const DamageInfo& damageInfo) {
         return;
     }
 
-    stats.health.current -= damageInfo.amount;
+    const int effectiveDamage = damageInfo.amount > 0 ? kBossDamagePerHit : 0;
+    if (effectiveDamage <= 0) {
+        return;
+    }
+
+    stats.health.current -= effectiveDamage;
     hitFeedback.blinking = true;
     hitFeedback.blinkDurationSeconds = hitFlashSeconds;
     hitFeedback.invulnerabilitySeconds = hitFlashSeconds;
 
-    if (damageInfo.amount > 0) {
-        CombatSystem combatSystem;
-        if (!staggerWindow.active) {
-            combatSystem.openTimedWindow(staggerWindow, 5.0f);
-        }
-        damageTakenSinceLastStagger += damageInfo.amount;
+    CombatSystem combatSystem;
+    if (!staggerWindow.active) {
+        combatSystem.openTimedWindow(staggerWindow, 5.0f);
     }
+    damageTakenSinceLastStagger += effectiveDamage;
 
     if (stats.health.current <= 0) {
         stats.health.current = 0;
         alive = false;
         state = BossState::Dead;
+        pendingDefeatReward = combatSystem.buildEnemyReward(*this);
+        defeatRewardQueued = true;
         attackSignalQueued = false;
         queuedAttackSignal = BossAttackSignal();
         introRemaining = 0.0f;
         attackStartupRemaining = 0.0f;
         attackRecoveryRemaining = 0.0f;
+        startupTargetPosition = Position(-1, -1);
         staggerRemaining = 0.0f;
         moveAccumulator = 0.0f;
         deathAnimationRemaining = deathFlashSeconds + deathMarkerSeconds;
@@ -836,6 +1246,28 @@ bool Boss::consumeAttackSignal(BossAttackSignal& signal) {
     return true;
 }
 
+bool Boss::consumeDefeatReward(RewardResolution& reward) {
+    if (!defeatRewardQueued) {
+        return false;
+    }
+
+    reward = pendingDefeatReward;
+    pendingDefeatReward = RewardResolution();
+    defeatRewardQueued = false;
+    return true;
+}
+
+bool Boss::hasEncounterStarted() const {
+    return state != BossState::Dormant;
+}
+
+bool Boss::isCombatActive() const {
+    return alive &&
+           state != BossState::Dormant &&
+           state != BossState::Intro &&
+           state != BossState::Dead;
+}
+
 bool Boss::isStaggered() const {
     return state == BossState::Staggered;
 }
@@ -860,6 +1292,347 @@ float Boss::getStaggerWindowRemaining() const {
     return std::max(0.0f, staggerWindow.durationSeconds - staggerWindow.elapsedSeconds);
 }
 
+BossAttackType Boss::getStartupAttackType() const {
+    return startupAttackType;
+}
+
+Position Boss::getStartupTargetPosition() const {
+    return startupTargetPosition;
+}
+
+std::vector<BossVisualGlyph> Boss::buildBodyVisual() const {
+    if (enemyType == EnemyType::BossRanged) {
+        std::vector<BossVisualGlyph> glyphs;
+        const bool ragePhase = stats.health.current * 2 <= stats.health.maximum;
+        const char coreGlyph = getRenderGlyph() == '&' ? 'o' : getRenderGlyph();
+
+        if (state == BossState::Dead) {
+            if (getRenderGlyph() == '*') {
+                const bool burstFrame = std::fmod(visualElapsedSeconds, 0.16f) < 0.08f;
+                if (burstFrame) {
+                    glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '\\'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x, position.y), 'x'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '/'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y + 1), '-'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '-'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '*'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '-'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 1), '-'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+                } else {
+                    glyphs.push_back(BossVisualGlyph(Position(position.x, position.y - 1), '*'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '*'));
+                    glyphs.push_back(BossVisualGlyph(position, 'o'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '*'));
+                    glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '*'));
+                }
+                return glyphs;
+            }
+
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '.'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '*'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 3, position.y), '.'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '.'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 1), '.'));
+            return glyphs;
+        }
+
+        if (state == BossState::Staggered) {
+            const float phase = std::fmod(visualElapsedSeconds, 0.36f);
+            if (phase < 0.12f) {
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '\\'));
+                glyphs.push_back(BossVisualGlyph(position, 'x'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '|'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+            } else if (phase < 0.24f) {
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '\\'));
+                glyphs.push_back(BossVisualGlyph(position, 'o'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '*'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+            } else {
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '\\'));
+                glyphs.push_back(BossVisualGlyph(position, 'x'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '|'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 3), '.'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 3), '.'));
+            }
+            return glyphs;
+        }
+
+        if (ragePhase) {
+            const bool rageFrame = std::fmod(visualElapsedSeconds, 0.22f) >= 0.11f;
+            if (!rageFrame) {
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y - 1), '~'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x, position.y - 1), '!'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y - 1), '~'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y), '\\'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), 'o'));
+                glyphs.push_back(BossVisualGlyph(position, '_'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), 'o'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 3, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '|'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '*'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '|'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 3, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y + 3), '~'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 3), '~'));
+            } else {
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y - 1), '~'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x, position.y - 1), '~'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y - 1), '~'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y), '\\'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), 'o'));
+                glyphs.push_back(BossVisualGlyph(position, '_'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), 'o'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 3, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y + 1), '*'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '|'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '*'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '|'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 1), '*'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 3, position.y + 1), '-'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+                glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+            }
+            return glyphs;
+        }
+
+        const float hoverPhase = std::fmod(visualElapsedSeconds, 0.54f);
+        if (hoverPhase < 0.18f) {
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '\\'));
+            glyphs.push_back(BossVisualGlyph(position, coreGlyph));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '/'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y + 1), '-'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '-'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '|'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '-'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 1), '-'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 3), '~'));
+            return glyphs;
+        }
+
+        if (hoverPhase < 0.36f) {
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '\\'));
+            glyphs.push_back(BossVisualGlyph(position, coreGlyph));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '/'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y + 1), '~'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '-'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '|'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '-'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 1), '~'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+            return glyphs;
+        }
+
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 3, position.y), '\\'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '\\'));
+        glyphs.push_back(BossVisualGlyph(position, coreGlyph));
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '/'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 3, position.y), '/'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 2, position.y + 1), '-'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '-'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '|'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '-'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 2, position.y + 1), '-'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 3), '~'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 3), '~'));
+        return glyphs;
+    }
+
+    if (enemyType != EnemyType::BossMelee) {
+        std::vector<BossVisualGlyph> glyphs;
+        const char renderGlyph = getRenderGlyph();
+        if (renderGlyph != ' ') {
+            glyphs.push_back(BossVisualGlyph(position, renderGlyph));
+        }
+        return glyphs;
+    }
+
+    if (!alive) {
+        std::vector<BossVisualGlyph> glyphs;
+        const char renderGlyph = getRenderGlyph();
+        if (renderGlyph != ' ') {
+            glyphs.push_back(BossVisualGlyph(position, renderGlyph));
+        }
+        return glyphs;
+    }
+
+    if (state == BossState::Staggered) {
+        return buildGlyphPattern(position,
+                                 facingDirection,
+                                 armoredStaggerPattern(computeVisualProgress(staggerRemaining, staggerDurationSeconds)),
+                                 4);
+    }
+
+    if (state == BossState::AttackStartup) {
+        const float progress = computeVisualProgress(attackStartupRemaining, startupDurationSeconds);
+        if (startupAttackType == BossAttackType::SweepSlash) {
+            return buildGlyphPattern(position, facingDirection, armoredHammerStartupPattern(progress >= 0.50f), 4);
+        }
+        if (startupAttackType == BossAttackType::DashSlash) {
+            return buildGlyphPattern(position, facingDirection, armoredDashStartupPattern(progress), 4);
+        }
+        if (startupAttackType == BossAttackType::JumpSlash) {
+            return buildGlyphPattern(position, facingDirection, armoredJumpStartupPattern(progress), 4);
+        }
+    }
+
+    if (state == BossState::AttackRecovery) {
+        const float progress = computeVisualProgress(attackRecoveryRemaining, startupRecoverySeconds);
+        if (startupAttackType == BossAttackType::SweepSlash) {
+            return buildGlyphPattern(position, facingDirection, armoredHammerRecoveryPattern(progress), 4);
+        }
+        if (startupAttackType == BossAttackType::DashSlash) {
+            return buildGlyphPattern(position, facingDirection, armoredDashRecoveryPattern(progress), 4);
+        }
+        if (startupAttackType == BossAttackType::JumpSlash) {
+            return buildGlyphPattern(position, facingDirection, armoredJumpRecoveryPattern(), 4);
+        }
+    }
+
+    if (state == BossState::Positioning || state == BossState::Intro) {
+        const bool walkFrame = std::fmod(visualElapsedSeconds, 0.36f) >= 0.18f;
+        return buildGlyphPattern(position,
+                                 facingDirection,
+                                 walkFrame ? armoredWalkPattern() : armoredIdlePattern(false),
+                                 4);
+    }
+
+    const bool breathing = std::fmod(visualElapsedSeconds, 0.50f) >= 0.25f;
+    return buildGlyphPattern(position, facingDirection, armoredIdlePattern(breathing), 4);
+}
+
+std::vector<BossVisualGlyph> Boss::buildStartupVisual() const {
+    std::vector<BossVisualGlyph> glyphs;
+    if (state != BossState::AttackStartup) {
+        return glyphs;
+    }
+
+    if (enemyType == EnemyType::BossMelee) {
+        const Position warningRow(position.x, position.y - 5);
+        glyphs.push_back(BossVisualGlyph(Position(warningRow.x - 1, warningRow.y), '!'));
+        glyphs.push_back(BossVisualGlyph(warningRow, '!'));
+        glyphs.push_back(BossVisualGlyph(Position(warningRow.x + 1, warningRow.y), '!'));
+
+        if (startupAttackType == BossAttackType::JumpSlash && startupTargetPosition.x >= 0) {
+            glyphs.push_back(BossVisualGlyph(Position(startupTargetPosition.x - 1, startupTargetPosition.y), '^'));
+            glyphs.push_back(BossVisualGlyph(startupTargetPosition, '!'));
+            glyphs.push_back(BossVisualGlyph(Position(startupTargetPosition.x + 1, startupTargetPosition.y), '^'));
+        }
+        return glyphs;
+    }
+
+    const Position warningRow(position.x, position.y - 1);
+    glyphs.push_back(BossVisualGlyph(Position(warningRow.x - 1, warningRow.y), '!'));
+    glyphs.push_back(BossVisualGlyph(warningRow, '!'));
+    glyphs.push_back(BossVisualGlyph(Position(warningRow.x + 1, warningRow.y), '!'));
+
+    if (enemyType == EnemyType::BossRanged) {
+        const int direction = facingDirection == FacingDirection::Right ? 1 : -1;
+        const int wandX = position.x + direction * 2;
+
+        if (startupAttackType == BossAttackType::FireballBurst) {
+            glyphs.push_back(BossVisualGlyph(Position(wandX, position.y + 1), '*'));
+            glyphs.push_back(BossVisualGlyph(Position(wandX + direction, position.y + 1), '*'));
+        } else if (startupAttackType == BossAttackType::MeteorDrop) {
+            glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 2), '/'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 2), '|'));
+            glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 2), '\\'));
+        } else if (startupAttackType == BossAttackType::SweepSlash) {
+            glyphs.push_back(BossVisualGlyph(Position(wandX, position.y + 1), '_'));
+            glyphs.push_back(BossVisualGlyph(Position(wandX + direction, position.y + 1), '-'));
+        }
+        return glyphs;
+    }
+
+    if (facingDirection == FacingDirection::Right) {
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y), '>'));
+    } else {
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y), '<'));
+    }
+
+    if (startupAttackType == BossAttackType::SweepSlash) {
+        const int slashX = facingDirection == FacingDirection::Right ? position.x + 1 : position.x - 1;
+        glyphs.push_back(BossVisualGlyph(Position(slashX, position.y + 1),
+                                         facingDirection == FacingDirection::Right ? '/' : '\\'));
+    } else if (startupAttackType == BossAttackType::DashSlash) {
+        const int direction = facingDirection == FacingDirection::Right ? 1 : -1;
+        for (int step = 1; step <= 4; ++step) {
+            glyphs.push_back(BossVisualGlyph(Position(position.x + direction * step, position.y + 1), '='));
+        }
+        glyphs.push_back(BossVisualGlyph(Position(position.x + direction * 5, position.y + 1), '.'));
+    } else if (startupAttackType == BossAttackType::JumpSlash) {
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '/'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '#'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '\\'));
+
+        if (startupTargetPosition.x >= 0) {
+            glyphs.push_back(BossVisualGlyph(Position(startupTargetPosition.x - 1, startupTargetPosition.y), '^'));
+            glyphs.push_back(BossVisualGlyph(startupTargetPosition, '!'));
+            glyphs.push_back(BossVisualGlyph(Position(startupTargetPosition.x + 1, startupTargetPosition.y), '^'));
+        }
+    } else if (startupAttackType == BossAttackType::FireballBurst) {
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '.'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '*'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '.'));
+    } else if (startupAttackType == BossAttackType::MeteorDrop) {
+        glyphs.push_back(BossVisualGlyph(Position(position.x - 1, position.y + 1), '/'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x, position.y + 1), '|'));
+        glyphs.push_back(BossVisualGlyph(Position(position.x + 1, position.y + 1), '\\'));
+    }
+
+    return glyphs;
+}
+
+BossAttackVisual Boss::buildResolvedAttackVisual(const BossAttackSignal& signal) const {
+    if (signal.type == BossAttackType::SweepSlash) {
+        if (enemyType == EnemyType::BossRanged) {
+            return buildBossStaffVisual(signal.origin, signal.facingDirection);
+        }
+        return buildBossSweepVisual(signal.origin, signal.facingDirection);
+    }
+
+    if (signal.type == BossAttackType::DashSlash) {
+        return buildBossDashVisual(signal.origin, signal.facingDirection);
+    }
+
+    if (signal.type == BossAttackType::JumpSlash) {
+        const Position target = signal.targetPosition.x >= 0 ? signal.targetPosition : signal.origin;
+        return buildBossJumpSlashVisual(target, signal.facingDirection);
+    }
+
+    return BossAttackVisual();
+}
+
 bool Boss::shouldEnterStagger() const {
     return alive &&
            state != BossState::Dead &&
@@ -875,6 +1648,7 @@ void Boss::resetStaggerMeter() {
 
 bool Boss::updateCommonState(float deltaSeconds) {
     updateHitFeedback(deltaSeconds);
+    visualElapsedSeconds += deltaSeconds;
 
     CombatSystem combatSystem;
     combatSystem.advanceTimedWindow(staggerWindow, deltaSeconds);
@@ -900,7 +1674,10 @@ bool Boss::updateCommonState(float deltaSeconds) {
         attackStartupRemaining -= deltaSeconds;
         if (attackStartupRemaining <= 0.0f) {
             attackStartupRemaining = 0.0f;
-            queuedAttackSignal = BossAttackSignal(startupAttackType, position, facingDirection);
+            queuedAttackSignal = BossAttackSignal(startupAttackType,
+                                                  position,
+                                                  startupTargetPosition,
+                                                  facingDirection);
             attackSignalQueued = true;
             state = BossState::AttackRecovery;
             attackRecoveryRemaining = startupRecoverySeconds;
@@ -998,8 +1775,13 @@ void Boss::wakeUp(float introSeconds) {
     moveAccumulator = 0.0f;
 }
 
-void Boss::startAttack(BossAttackType attackType, float startupSeconds, float recoverySeconds) {
+void Boss::startAttack(BossAttackType attackType,
+                       float startupSeconds,
+                       float recoverySeconds,
+                       const Position& targetPosition) {
     startupAttackType = attackType;
+    startupTargetPosition = targetPosition;
+    startupDurationSeconds = startupSeconds;
     startupRecoverySeconds = recoverySeconds;
     attackStartupRemaining = startupSeconds;
     attackRecoveryRemaining = 0.0f;
@@ -1011,12 +1793,14 @@ void Boss::startAttack(BossAttackType attackType, float startupSeconds, float re
 
 void Boss::enterStagger(float staggerSeconds) {
     state = BossState::Staggered;
+    staggerDurationSeconds = staggerSeconds;
     staggerRemaining = staggerSeconds;
     introRemaining = 0.0f;
     attackStartupRemaining = 0.0f;
     attackRecoveryRemaining = 0.0f;
     attackSignalQueued = false;
     queuedAttackSignal = BossAttackSignal();
+    startupTargetPosition = Position(-1, -1);
     moveAccumulator = 0.0f;
     resetStaggerMeter();
 }
@@ -1032,12 +1816,11 @@ MeleeBoss::MeleeBoss(const std::string& enemyId, const Position& initialSpawnPos
       loseAggroRange(24.0f),
       slashRange(2.0f),
       dashRange(7.0f),
+      jumpSlashRange(6.0f),
       introSeconds(0.55f),
       attackStartupSeconds(0.45f),
       attackRecoverySeconds(0.70f),
       staggerSeconds(1.10f) {
-    stats.health.current = 18;
-    stats.health.maximum = 18;
     staggerThreshold = 7;
     moveStepSeconds = 0.14f;
 }
@@ -1072,6 +1855,14 @@ void MeleeBoss::updateAI(const Position& playerPosition, float deltaSeconds) {
         return;
     }
 
+    if (absY >= 2.0f && absX <= jumpSlashRange) {
+        startAttack(BossAttackType::JumpSlash,
+                    attackStartupSeconds + 0.10f,
+                    attackRecoverySeconds + 0.18f,
+                    playerPosition);
+        return;
+    }
+
     if (absY <= 1.0f && absX <= slashRange) {
         startAttack(BossAttackType::SweepSlash, attackStartupSeconds, attackRecoverySeconds);
         return;
@@ -1102,6 +1893,8 @@ AttackDefinition MeleeBoss::getAttackForType(BossAttackType attackType) const {
         return getFrontJumpSlash();
     case BossAttackType::DashSlash:
         return getFrontDash();
+    case BossAttackType::JumpSlash:
+        return getFrontJumpSlash();
     default:
         return getPrimaryAttack();
     }
@@ -1146,7 +1939,7 @@ int MeleeBoss::getHkdReward() const {
 }
 
 RangedBoss::RangedBoss(const std::string& enemyId, const Position& initialSpawnPosition)
-    : Boss(enemyId, EnemyType::BossRanged, initialSpawnPosition, 'Q'),
+    : Boss(enemyId, EnemyType::BossRanged, initialSpawnPosition, 'o'),
       aggroRange(20.0f),
       loseAggroRange(26.0f),
       castRange(10.0f),
@@ -1156,8 +1949,8 @@ RangedBoss::RangedBoss(const std::string& enemyId, const Position& initialSpawnP
       attackRecoverySeconds(0.75f),
       staggerSeconds(1.20f),
       nextAttackMeteor(false) {
-    stats.health.current = 14;
-    stats.health.maximum = 14;
+    stats.health.current = kRangedBossHealth;
+    stats.health.maximum = kRangedBossHealth;
     staggerThreshold = 6;
     moveStepSeconds = 0.18f;
 }
@@ -1179,6 +1972,9 @@ void RangedBoss::updateAI(const Position& playerPosition, float deltaSeconds) {
 
     const float absX = static_cast<float>(std::abs(playerPosition.x - position.x));
     const float absY = static_cast<float>(std::abs(playerPosition.y - position.y));
+    const bool ragePhase = stats.health.current * 2 <= stats.health.maximum;
+    const float currentCastRange = ragePhase ? castRange + 2.0f : castRange;
+    const float currentRetreatRange = ragePhase ? retreatRange + 1.0f : retreatRange;
     faceToward(playerPosition);
 
     if (state == BossState::Dormant) {
@@ -1193,24 +1989,37 @@ void RangedBoss::updateAI(const Position& playerPosition, float deltaSeconds) {
         return;
     }
 
-    if (absX <= castRange && absY <= 5.0f) {
+    if (absX <= currentRetreatRange && absY <= 2.0f) {
+        startAttack(BossAttackType::SweepSlash,
+                    ragePhase ? 0.20f : 0.25f,
+                    ragePhase ? 0.24f : 0.35f);
+        return;
+    }
+
+    if (absX <= currentCastRange && absY <= 5.0f) {
         const BossAttackType nextAttack = nextAttackMeteor ? BossAttackType::MeteorDrop : BossAttackType::FireballBurst;
         nextAttackMeteor = !nextAttackMeteor;
         startAttack(nextAttack,
-                    nextAttack == BossAttackType::MeteorDrop ? attackStartupSeconds + 0.15f : attackStartupSeconds,
-                    nextAttack == BossAttackType::MeteorDrop ? attackRecoverySeconds + 0.15f : attackRecoverySeconds);
+                    nextAttack == BossAttackType::MeteorDrop
+                            ? attackStartupSeconds + (ragePhase ? 0.10f : 0.15f)
+                            : (ragePhase ? attackStartupSeconds - 0.06f : attackStartupSeconds),
+                    nextAttack == BossAttackType::MeteorDrop
+                            ? attackRecoverySeconds + (ragePhase ? 0.05f : 0.15f)
+                            : (ragePhase ? attackRecoverySeconds - 0.18f : attackRecoverySeconds));
         return;
     }
 
     Position target = position;
-    if (absX < retreatRange) {
+    if (absX < currentRetreatRange) {
         target.x += playerPosition.x < position.x ? 1 : -1;
-    } else if (playerPosition.x != position.x) {
+    } else if (absX > currentCastRange - 2.0f && playerPosition.x != position.x) {
         target.x += playerPosition.x > position.x ? 1 : -1;
     }
 
     if (std::abs(playerPosition.y - position.y) > 2) {
         target.y += playerPosition.y > position.y ? 1 : -1;
+    } else if (ragePhase && position.y > spawnPosition.y - 1) {
+        target.y -= 1;
     }
     moveToward(target, deltaSeconds);
 }
@@ -1225,6 +2034,7 @@ AttackDefinition RangedBoss::getAttackForType(BossAttackType attackType) const {
         return getFireballShot();
     case BossAttackType::MeteorDrop:
         return getMeteorRain();
+    case BossAttackType::JumpSlash:
     case BossAttackType::SweepSlash:
         return getStaffKnockback();
     default:

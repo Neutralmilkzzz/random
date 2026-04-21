@@ -36,6 +36,8 @@ public:
     const game::CharacterStats& getStats() const;
     void restoreSavedStats(const game::CharacterStats& savedStats);
     game::FacingDirection getFacingDirection() const;
+    void setDoubleJumpUnlocked(bool unlocked);
+    bool hasDoubleJumpUnlocked() const;
 
     std::string buildHud() const;
     std::string buildHud(const std::string& locationName) const;
@@ -171,13 +173,21 @@ private:
     KeyStateManager& ksm;
     bool isJumping;
     bool jumpHeldLastFrame;
+    bool doubleJumpUnlocked;
+    bool airJumpAvailable;
+    bool dashActive;
+    bool dashAvailable;
     float horizontalMoveAccumulator;
     float verticalMoveAccumulator;
+    float dashMoveAccumulator;
     float upwardVelocity;
     float downwardVelocity;
     float jumpHoldRemaining;
     float minimumJumpRiseRemaining;
     float riseVelocityDropAccumulator;
+    int dashFramesRemaining;
+    int dashCooldownFrames;
+    int dashDirection;
 
     game::CharacterStats stats;
     game::HitFeedbackState hitFeedback;

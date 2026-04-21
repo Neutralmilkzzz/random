@@ -17,10 +17,10 @@
 
 | Copilot 名称 | Resume | 负责模块 | 当前状态 | 最新进展 | 阻塞 | 接手人 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Copilot CLI（GPT-5.4） | `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 项目结构、构建入口、沙盒、地面敌人、飞行敌人原型、Boss 原型 / `CombatSystem`、参数文档、`module_02 / module_04` 地图细化 | 进行中 | 已认领并行任务 B：Boss 原型 / 敌人扩展 / 战斗结算层最小化；此前已完成地面怪与飞行怪正式模块化并接入主循环，补上击杀 +10 HKD / `+10` 飘字，并细化 `module_02`、`module_04` 战斗白盒地图 | 本轮禁止改 `main.cpp`，后续需主流程位预留 Boss 刷入与正式接线口 | 下一位接手主流程接线或继续补完整 Boss/Battle loop 的 Copilot |
-| Copilot CLI（GPT-5.4） | 待填写（当前会话 resume 退出后补） | 技能/攻击 ASCII 表现设计、法术分镜、显示语义约定 | 进行中 | 已补充左右冲击波、下砸、普通攻击缺口、敌人受伤/死亡、HKD/HUD 与 `YOU DEAD` 白屏死亡演出的 ASCII 方案 | 无 | 下一位接手技能正式渲染接入、玩家攻击判定或死亡演出落地的 Copilot |
-| Copilot CLI（GPT-5.4） | `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 玩家沙盒、敌人沙盒、MapDrawer 渲染、参数同步、主线 Player 接入、`module_01 / module_03` 地图细化、主菜单 / 存档最小闭环 | 已完成 | 已完成玩家攻击/法术/HUD/`YOU DEAD` 死亡演出接入主线 `Player.cpp`，改成 `W/S` + `J/K` 组合键映射，并细化 `module_01`、`module_03`；现已补完 `NEW GAME` / `CONTINUE` / 最小存档闭环，主线可保存地图、出生点、HP、Soul、HKD，并在死亡后按当前存档点恢复 | 无 | 下一个负责玩家状态机、击退、主线战斗、固定存档点或继续扩图的人 |
-| Copilot CLI（GPT-5.4） | ` copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 参数整理、调参文档、员工文档、进度盘点、地图仓库、`NpcSystem` 最小交互、主界面 HUD 精简 | 进行中 | 已完成基础参数归档、员工登记表建立与 resume 对应、8 张白盒地图 + `testcpp1` 主线接线、地图分工表；已细化 `spawn_village` / `random_event_01`，修复 `module_02` 入口卡墙与 `module_01` 边界破损；已落地 `NpcSystem` 最小交互模块，并把主界面改成顶部极简 HUD + 底部常驻操作说明，现已把 `NpcSystem` 正式接进 `main.cpp` 运行时，支持 `E` 交互 / `W/S` 选项 / `J` 购买，并补齐 `Makefile` / `run.bat` 构建项 | 待继续做整线跑图验证，确认各 NPC / 门 / 存档点在真实流程里都稳定 | 下一位接手整线跑图验证、UI 微调或继续补文档的 Copilot |
+| Copilot CLI（GPT-5.4） | `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 项目结构、构建入口、沙盒、地面敌人、飞行敌人原型、Boss 原型 / `CombatSystem`、参数文档、`module_02 / module_04` 地图细化、Soul HUD 修复 | 已完成（本轮交付） | 已完成 Boss demo 下沉到 `Enemy.*`、`CombatSystem` 最小结算接口与相关文档：`boss-demo-into-enemy`、`combat-resolver-implement`、`combat-resolver-docs` 均已 done；主流程位现可直接读取 Boss 状态、攻击信号与一次性击杀奖励 | 仅剩 `combat-resolver-design` 处于 blocked，且该项原本就依赖别的 AI 先完成 `PlayerSandbox` 相关改动，不属于本轮未收尾项 | 下一位接手主流程接线、Boss 正式接入或继续补完整 Battle loop 的 Copilot |
+| Copilot CLI（GPT-5.4） | copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd | 技能/攻击 ASCII 表现设计、法术分镜、显示语义约定 | 进行中 | 已补充左右冲击波、下砸、普通攻击缺口、敌人受伤/死亡、HKD/HUD 与 `YOU DEAD` 白屏死亡演出的 ASCII 方案 | 无 | 下一位接手技能正式渲染接入、玩家攻击判定或死亡演出落地的 Copilot |
+| Copilot CLI（GPT-5.4） | `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 玩家沙盒、敌人沙盒、MapDrawer 渲染、参数同步、主线 Player 接入、`module_01 / module_03` 地图细化、主菜单 / 存档最小闭环、捷径门持久化解锁、二段跳 / 普通 dash、Boss 房主流程接线 / 入场对话 / 胜利结算 | 已完成 | 已完成玩家攻击/法术/HUD/`YOU DEAD` 死亡演出接入主线 `Player.cpp`，改成 `W/S` + `J/K` 组合键映射，并细化 `module_01`、`module_03`；已补完 `NEW GAME` / `CONTINUE` / 最小存档闭环与捷径门持久化解锁；现已把普通横向 dash 定为默认 `SHIFT`，并将二段跳改成商人售卖、购买后随存档持久化的能力；本轮已把 `boss_room_01` 接成“进房对白 -> 开战 -> Boss 死亡 -> VICTORY 结算”的主流程闭环，并保持死亡恢复链路可复用 | 无 | 下一个负责玩家状态机、击退、主线战斗、固定存档点、Boss 收尾 polish 或整线跑图验证的人 |
+| Copilot CLI（GPT-5.4） | ` copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 参数整理、调参文档、员工文档、进度盘点、地图仓库、`NpcSystem` 最小交互、主界面 HUD 精简、`boss_room_01` 决战房收口 | 进行中 | 已完成基础参数归档、员工登记表建立与 resume 对应、8 张白盒地图 + `testcpp1` 主线接线、地图分工表；已细化 `spawn_village` / `random_event_01`，修复 `module_02` 入口卡墙与 `module_01` 边界破损；已落地 `NpcSystem` 最小交互模块，并把主界面改成顶部极简 HUD + 底部常驻操作说明，现已把 `NpcSystem` 正式接进 `main.cpp` 运行时，支持 `E` 交互 / `W/S` 选项 / `J` 购买，并补齐 `Makefile` / `run.bat` 构建项；本轮按最新地图重构任务重做了 `module_05`，并已把 `boss_room_01` 收成右侧入场缓冲 + 中左部开阔主战场的决战房骨架，保留门位、不放杂兵，为 Boss 对话和胜利结算预留空间 | 待继续做整线跑图验证，并确认 Boss 房正式接线后节奏和门位读感都稳定 | 下一位接手整线跑图验证、Boss 房主流程接线验证或继续补文档的 Copilot |
 
 ---
 
@@ -42,19 +42,34 @@
 | 2026-04-21 | Copilot CLI（GPT-5.4） | NPC 运行时接线修复 | 已完成 | 修复底部出现 `Press E` 但按下后没有真实效果的问题；主程序现已接入医生回血、村长对话、商人开店与购买结果，并在交互后同步当前存档数据 | 下一位接手整线跑图验证或继续补交互 UI 的 Copilot | 额外补齐 `Makefile` / `run.bat`，避免后续重新编译时漏链 `src\\npc\\NpcSystem.cpp` |
 | 2026-04-21 | Copilot CLI（GPT-5.4） | 紧急任务 2：主界面 HUD 精简 | 已完成 | 只在允许范围内调整 `Player` HUD 与 `main.cpp` 的拼接，把顶部显示收缩到灵魂 / 血量 / HKD / 地点，并去掉大段教学与调试信息 | 下一位接手继续做整线跑图验证或 UI 微调的 Copilot | 本轮未改敌人、存档和 NPC 模块逻辑 |
 | 2026-04-21 | Copilot CLI（GPT-5.4） | HUD 交互提示回补 | 已完成 | 在底部恢复常驻基础操作说明，并让靠近门 / NPC 时追加显示 `Press E` 交互提示 | 下一位接手继续做 UI 微调或整线跑图验证的 Copilot | 保持顶部 HUD 简洁，不回退到旧调试屏 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 紧急任务 3：Soul 单个容器重绘修复 | 已完成 | 只在 `src\\player\\Player.cpp` 内做最小修复：Soul 单格填充改成稳定左对齐，读数改成固定宽度，避免单格 / 数值变化时出现错位、覆盖或残影感 | 下一位接手继续做 Boss 主流程接线或整线跑图验证的 Copilot | 未改 `main.cpp`、敌人和 NPC 模块；临时编译验证通过 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | Boss demo 视觉语言统一 | 已完成 | 按统一字符语言重做 `BossSandbox`：近战 Boss 现将 `!` 用作危险核心、`=` 用作冲刺路径、`/ \\` 用作挥砍、`^` 用作落点预警、`*` 用作命中爆点，并给 JumpSlash / DashSlash / SweepSlash 分开了可读前摇与短余波 | 下一位接手继续补远程 Boss 分镜、Boss 房正式接线或整线跑图验证的 Copilot | 保持“前摇清楚 > 命中强烈 > 余波很短”，本轮未改 `main.cpp` |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 新任务 B：BossSandbox Boss demo | 已完成 | 把 `BossSandbox` 从框架推进到可打 demo：近战 Boss 现可苏醒、追位、受击、硬直、死亡，并具备横扫、前冲斩、跳劈三种基础招式；仍保留远程原型用于后续扩展 | 下一位接手主流程接线、Boss 房正式接入或继续补 Boss 细节的 Copilot | 本轮仍未触碰 `main.cpp` / 存档 / NPC 文件 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | Boss demo 下沉到 `Enemy.*` | 已完成 | 把近战 Boss 的启动预警、横扫 / 冲刺斩 / 跳劈命中图样、短余波和落点位移规格写回 `include\\enemy\\Enemy.h` / `src\\enemy\\Enemy.cpp`；`BossSandbox` 现只负责消费这些规格并显示 | 下一位接手继续补远程 Boss 视觉规格、Boss 房接线或主流程正式刷入的 Copilot | 这次仍未触碰 `main.cpp`，但 Boss 读招规则已不再只存在于沙盒里 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | `module_02` / `module_04` 最新重构任务 | 已完成 | 按最新地图重构标准重做两张图：改成分段推进、分层清敌和蛇形穿越；保留原门位不动，重新安放地面怪并校正行宽、自查门位与刷怪支撑 | 下一位接手主程序跑图验证或继续补 Boss 主流程接线的 Copilot | 本轮只改 `data\\maps\\module_02.map`、`data\\maps\\module_04.map` 与 staff 同步记录 |
 | 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 并行任务 A：主菜单 / 存档最小闭环 | 已完成 | 接通 `GameSession` / `SaveSystem` / `main.cpp`，让标题页按真实存档显示 `CONTINUE`，新游戏会落盘，切图自动存档，死亡后按当前存档点恢复 HP / Soul / HKD / 地图与出生点，并补齐 `Makefile` / `run.bat` 构建项 | 下一位接手固定存档点、难度选择或更完整的流程 UI 的 Copilot | 已用最小存档烟测确认存读与死亡恢复链路可用 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 紧急任务 1：捷径门持久化解锁 | 已完成 | 把 `module_03 <-> spawn_village`、`module_05 <-> spawn_village` 改成村侧初始锁定、远侧交互解锁、解锁后双向通行；补齐 `module_05` 缺失的村侧入口出生点，并把解锁状态写进存档 | 下一位接手固定存档点、暂停菜单或整线跑图验证的 Copilot | 已通过门目标出生点校验和存档持久化烟测；当前主程序编译验证需带上 `src\\combat\\CombatSystem.cpp` |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 新任务 A：二段跳 + 普通 Dash | 已完成 | 在 `Player` / `PlayerSandbox` 中加入 `SPACE` 二段跳和 `SHIFT` 普通横向 dash；随后把主流程改成初始仅开放 dash、二段跳需通过商人购买 `Double Jump Crest` 才能解锁，且会写入存档并更新底部操作提示 | 下一位接手玩家状态机、正式能力解锁扩展或主流程教学提示的 Copilot | 已完成 `player_sandbox.exe` / `testcpp1.exe` 编译，并用临时 harness 验证二段跳解锁前后差异、商店购买和存档持久化都生效 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | 新任务 C：单向门 D 标记位置修正 | 已完成 | 只改 `data\\maps\\spawn_village.map`，把通往 `module_05` 的村侧捷径门移到左边界，把通往 `module_03` 的村侧捷径门移到下层地面门位，同时把对应回村出生点贴到门旁，解决出生村里两扇单向门悬在房间内部的问题 | 下一位接手整线跑图验证或继续微调村庄门位可读性的 Copilot | 本轮按用户要求只修出生点图里的两扇门；相关落点已重新校验通过 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | 主线地图重构任务下发 | 已完成 | 按“房间必须有完整穿越路径、不能从 A 点直跑到 B 点”的新标准，重排 6 张主线非特殊房的分工：排除 `random_event_01` 与 `boss_room_01`，其余 6 张图分配给另外 3 个 AI 并要求严格分开开发 | 各房间负责人按新标准分别重构 | 本轮核心要求是补纵向墙体、切断直线通路、让每个平台和每堵墙都有明确设计目的 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | `module_01` 平台链重做 | 已完成 | 在不移动左右两个门位的前提下，重做 `data\\maps\\module_01.map` 的主要地形：把原先大量无效平台改成连续可用的爬升 / 下落 / 再起跳路线，并补上多段阻挡墙，让玩家推进时必须真正利用平台链 | 下一位接手整线跑图验证或继续微调 `module_01` 手感的 Copilot | 本轮只改平台和墙体，不改门位；行宽与 transition 坐标已重新检查 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | `module_05` 长路径重构 | 已完成 | 按最新地图重构标准只重做 `data\\maps\\module_05.map`：保留 Boss 门、村庄捷径门和模块 4 入口门位不动，改成必须先从 `module_04` 入口爬上中层主桥，再分支前往左侧 Boss 门或右侧捷径门的长路线，并把 3 个陆地敌人压到真实路线节点上 | 下一位接手整线跑图验证或继续微调 Boss 前压迫感的 Copilot | 用户已明确要求本轮不要再动 `spawn_village`，所以出生村保持现状；`module_05` 的门位、刷怪落点和行宽已重新自查 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | Boss 房成型并行任务下发 | 已完成 | 按“Boss 房重做 + Boss 正式嵌入 + 入场对话 + 死亡后胜利结算”这一条主线，把工作拆给 3 个 AI：地图、Boss 本体/战斗、主流程接线/UI 各自独立推进，确保可同时开发且不抢文件 | 3 位负责人各自认领并行推进 | 当前目标是把 demo 从“很好玩的原型”收成“有终点、有结算的完整成型版” |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | `boss_room_01` 决战房收口 | 已完成 | 只改 `data\\maps\\boss_room_01.map`：去掉杂兵刷点，保留右侧回程门位和出生点不动，改成右侧短入场缓冲 + 中左部开阔横向战斗区，并只留下少量高位平台与右侧顶棚，给 Boss 登场对话与胜利结算预留清晰空间 | 下一位接手 Boss 房主流程接线、Boss 刷入验证或整线跑图验证的 Copilot | 已自查行宽、门位、出生点脚下支撑和无封死路线；当前不负责 Boss 刷入逻辑与对话流程 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | Boss demo 下沉 / `CombatSystem` 最小结算接口 | 已完成 | 该线负责人已确认：`boss-demo-into-enemy`、`combat-resolver-implement`、`combat-resolver-docs` 全部 done；Boss 状态读取、攻击信号消费和一次性击杀奖励接口已可供主流程位直接接入 | 下一位接手 Boss 房主流程接线 / `VICTORY` 结算的 Copilot | 仅剩 `combat-resolver-design` 为 blocked，但它本来就依赖其他 AI 先完成 `PlayerSandbox` 相关改动，不属于这次交付未收尾 |
 
 ---
 
 ## 当前主任务
 
-是的，**现在的主要工作就是一张一张图去刻画**。
+现在的主任务已经收口成一条非常明确的线：**把 `boss_room_01` 做成 demo 终点**。
 
 当前优先级：
 
-1. 继续把剩余白盒房间按同标准细化：平台可跳、敌人适中、门洞与动线清晰
-2. 用 `testcpp1` 做一遍从 `spawn_village` 到 `boss_room_01` 的整线跑图验证
-3. 主流程稳定后，再补捷径门状态、事件房和商店房的正式逻辑
+1. 重做 `boss_room_01`：地图不再是普通白盒，而是带决战感、可读、可打的 Boss 房
+2. 把 Boss 正式接进主流程：进房触发登场对话，结束对话后开战
+3. 接通 Boss 死亡后的胜利结算，让 demo 有明确终点和收束
+4. 上述主线闭环完成后，再考虑 `random_event_01`、剧情补量和更多收尾内容
 
 ---
 
@@ -84,6 +99,149 @@
 - **当前更像“收尾 + 接线 + 打磨”阶段**，不是大面积新开荒阶段
 - 接下来优先级不该再分散，而应围绕“把现有主链闭合成 demo”推进
 - 当前 demo 完成度可按 **约 70%** 理解；若上述 6 项补齐，项目就会从“能玩的原型”进入“成型 demo”
+
+---
+
+## Boss 房成型并行任务下发（3 个 AI，必须同时开发且不能冲突）
+
+当前目标：**把 `boss_room_01` 收成 demo 的终点房。**  
+闭环要求只有一条：
+
+1. 玩家进入 `boss_room_01`
+2. 先触发 Boss 登场对话
+3. 对话结束后正式开战
+4. 玩家死亡可按现有主流程正常恢复
+5. Boss 死亡后显示胜利结算
+6. 让当前 demo 在 Boss 房这里形成清晰的完成感
+
+并行规则：
+
+1. `main.cpp` / 主流程接线只允许 **1 个 AI** 改。
+2. `Enemy.*` / `CombatSystem.*` 只允许 **1 个 AI** 改。
+3. `boss_room_01.map` 只允许 **1 个 AI** 改。
+4. 如果需要别的模块配合，先在 staff 写“需要预留 hook / 读取某状态”，不要跨线直接改。
+5. 这轮优先做最小可交付版本，不额外扩随机事件、不扩大剧情树。
+
+### 并行任务 A：Boss 房主流程接线 / 入场对话 / 胜利结算
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e`
+
+**目标**
+
+- 让 `boss_room_01` 在主程序里真正形成“进房 -> 对话 -> 开战 -> 胜利结算”的流程
+- 复用现有死亡恢复 / 存档闭环，不另起新体系
+- 让 Boss 战后有明确的胜利落点，而不是直接回到普通跑图态
+
+**只负责这些文件**
+
+- `src\core\main.cpp`
+- `include\core\GameSession.h`
+- `src\core\GameSession.cpp`
+- 如确实需要再改：`include\save\SaveSystem.h`
+- 如确实需要再改：`src\save\SaveSystem.cpp`
+
+**本轮交付**
+
+- 玩家首次进入 `boss_room_01` 会先进入 Boss 开场状态
+- 屏幕上显示 1~3 句 Boss 入场台词，玩家可按现有确认键推进
+- 对话结束后正式刷 Boss / 激活 Boss 战逻辑
+- Boss 死亡后显示最小胜利结算：`VICTORY`、击败 Boss、奖励 / 收尾文案
+- 若玩家在 Boss 战中死亡，仍按当前主流程稳定恢复，不把流程卡死
+
+**禁止触碰**
+
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- `include\combat\CombatSystem.h`
+- `src\combat\CombatSystem.cpp`
+- `data\maps\boss_room_01.map`
+
+### 并行任务 B：Boss 本体 / 攻击节奏 / 战斗结算
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af`
+
+**目标**
+
+- 把当前 Boss demo 从 sandbox 级原型推进成可供主流程刷入的正式 Boss 模块
+- 保证 Boss 至少有完整的出招、受击、硬直、死亡和奖励发放
+- 不碰主流程接线，只把接口和状态做扎实
+
+**只负责这些文件**
+
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- `include\combat\CombatSystem.h`
+- `src\combat\CombatSystem.cpp`
+- 如确实需要验证再改：`src\sandbox\BossSandbox.cpp`
+
+**本轮交付**
+
+- 至少 1 个正式可刷入的 Boss 形态
+- Boss 至少具备：待机 / 追位、2~3 个主力攻击、受击、硬直、死亡
+- Boss 死亡后能给出统一的击杀 / 奖励结果，供主流程位直接消费
+- 若需要主流程位配合，只能在 staff 中写清“需要读取的 Boss 状态 / 回调点”
+
+**主流程位需要读取的 Boss 状态 / 回调点**
+
+- `Boss::getState()`：用于区分 `Dormant -> Intro -> Positioning / AttackStartup / AttackRecovery / Staggered -> Dead`
+- `Boss::hasEncounterStarted()`：用于判断玩家是否已经唤醒 Boss、是否该结束入场对白阶段
+- `Boss::isCombatActive()`：用于判断 Boss 是否已经进入正式战斗态
+- `Boss::consumeAttackSignal(...)`：用于读取本轮出招信号并驱动命中 / 特效 / 主流程侧攻击表现
+- `Boss::consumeDefeatReward(...)`：用于在 Boss 死亡后只消费一次统一奖励结果，避免主流程重复发奖励
+
+**禁止触碰**
+
+- `src\core\main.cpp`
+- `include\core\GameSession.h`
+- `src\core\GameSession.cpp`
+- `data\maps\boss_room_01.map`
+- `include\save\SaveSystem.h`
+- `src\save\SaveSystem.cpp`
+
+### 并行任务 C：`boss_room_01` 地图重做 / 决战房结构收口
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb`
+
+**目标**
+
+- 把 `boss_room_01` 从普通白盒战斗房改成真正的决战房
+- 保证 Boss 有足够读招与位移空间，同时保留玩家躲避和恢复节奏
+- 给 Boss 登场对话和胜利结算预留清楚的入场区 / 战斗区 / 收尾感
+
+**只负责这些文件**
+
+- `data\maps\boss_room_01.map`
+- 如需同步文字说明：`docs\game_design.md`
+- 如需同步参数：`docs\parameter_tuning.md`
+
+**本轮交付**
+
+- `boss_room_01` 保留正确门位，不乱动 transition 位置
+- 入口进入后要先有短缓冲区，再进入主要战斗区
+- 房间整体以横向 Boss 战为主，平台少而精，不能破坏读招
+- 不放杂兵，不把 Boss 房再做成普通清怪房
+- 交货前自查：门位正确、路线不封死、Boss 战核心活动区域足够清晰
+
+**禁止触碰**
+
+- `src\core\main.cpp`
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- `include\combat\CombatSystem.h`
+- `src\combat\CombatSystem.cpp`
+
+说明：
+
+- 任务 A 是唯一允许改主流程的人。
+- 任务 B 先把 Boss 模块和结果接口做稳，等待任务 A 接入。
+- 任务 C 只管房间结构，不管 Boss 刷入逻辑和对话流程。
+- 这 3 条线都完成后，当前 demo 就可视为进入“成型可交付”状态。
 
 ---
 
@@ -330,14 +488,159 @@
 
 ---
 
-## 当前地图分工（4 个 AI / 8 张图）
+## 下一阶段并行任务下发（以当前主链为准）
 
-| Copilot / Resume | 分配地图 | 负责重点 | 交付要求 |
+假设当前主线、存档、NPC 最小交互都已稳定，下一阶段的重点不再继续铺大系统，而是补**移动能力、Boss demo、门位修正**这 3 条线。  
+要求：仍然**分开开发、并行推进、各自只动自己的文件组**。
+
+### 新任务 A：二段跳 + 普通 Dash（先在沙盒验证）
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e`
+
+**目标**
+
+- 做出《空洞骑士》风格的最小版二段跳
+- 做出普通横向 dash（先不做黑冲，不做无伤穿敌）
+- 优先在沙盒里把手感和可用性跑通，再考虑正式接主流程
+
+**只负责这些文件**
+
+- `include\player\Player.h`
+- `src\player\Player.cpp`
+- `src\sandbox\PlayerSandbox.cpp`
+- 如需文档同步：`docs\parameter_tuning.md`
+
+**本轮交付**
+
+- 二段跳可独立触发
+- 普通 dash 可左右触发
+- 至少在 `PlayerSandbox` 中完成可验证演示
+- 不要求这一轮直接写进商店购买或主流程永久解锁
+
+**禁止触碰**
+
+- `src\core\main.cpp`
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- `data\maps\*.map`
+
+### 新任务 B：BossSandbox 内搓出一个 Boss demo
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af`
+
+**目标**
+
+- 按核心文档先做出一个能打、能受击、能验证节奏的 Boss demo
+- 先在 `BossSandbox` 里跑，不要求这一轮就正式接进主流程
+- 优先验证 Boss 的体量、攻击节奏和基础战斗读感
+
+**只负责这些文件**
+
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- `src\sandbox\BossSandbox.cpp`
+- 如确实需要：`include\combat\CombatSystem.h`、`src\combat\CombatSystem.cpp`
+- 文档对照：`docs\game_design.md`
+
+**本轮交付**
+
+- 至少 1 个 Boss demo
+- Boss 至少具备：血量、受击、死亡、1~2 个攻击、基础行为切换
+- 能在 `BossSandbox` 里独立验证
+- 不要求这一轮就补完整 Boss 房流程和通关逻辑
+
+**禁止触碰**
+
+- `src\core\main.cpp`
+- `include\save\SaveSystem.h`
+- `src\save\SaveSystem.cpp`
+- `include\npc\NpcSystem.h`
+- `src\npc\NpcSystem.cpp`
+
+### 新任务 C：单向门 D 标记位置修正
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb`
+
+**目标**
+
+- 修正当前单向门 `D` 标记和实际地图接壤位置的偏差
+- 保证上下相邻的箱庭，门一定出现在两张图真正接壤的地面/边界处
+- 优先修正视觉与交互的一致性，不扩展成大规模门系统重构
+
+**只负责这些文件**
+
+- `data\maps\spawn_village.map`
+- `data\maps\module_03.map`
+- `data\maps\module_05.map`
+- 如确实需要：`docs\world_layout_foundation.md`
+
+**本轮交付**
+
+- `D` 标记位置和实际门位一致
+- 上下相邻房间的门在视觉上真正接壤
+- 整线跑图时，门提示不再出现“明明在上下关系却悬在奇怪位置”的问题
+
+**禁止触碰**
+
+- `src\core\main.cpp`
+- `include\player\Player.h`
+- `src\player\Player.cpp`
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+
+---
+
+## 当前地图重构分工（3 个 AI / 6 张主线非特殊房）
+
+这一轮**不处理** `random_event_01` 和 `boss_room_01`。  
+只重构：
+
+- `spawn_village`
+- `module_01`
+- `module_02`
+- `module_03`
+- `module_04`
+- `module_05`
+
+统一重构标准：
+
+1. 禁止从 A 点到 B 点出现“大平地直跑通关”。
+2. 必须补出纵向墙体、落差和绕行，让玩家像在“穿越整个模块”。
+3. 每个平台都要有职责：跳跃衔接、战斗落点、转层、控视野或门前缓冲。
+4. 每堵墙都要有职责：切断捷径、限制直冲、迫使换层、组织战斗。
+5. 敌人要嵌进路线节点，不是随手撒在空地上。
+6. **绝不允许把玩家封死**：必须保证入口到出口始终可跑通，不能出现死路、软锁、跳下去回不来却又无法前进的封死结构。
+7. 每张图至少要保留一条稳定主路线；即使做分层、绕行和墙体阻挡，也只能“拉长路线”，不能“掐断路线”。
+8. 现有单向门、隐藏门必须纳入路线设计：门前后都要有合理到达路径，不能把门做成孤点、摆设或错位捷径。
+9. 门的位置视为当前关卡骨架的一部分：**必须位于合适且正确的位置，且本轮不允许随意移动门位**。
+10. 交货前必须自查：所有陆地敌人必须落在真实可站立的平面上，不能悬空、卡边或站在不成立的平台端头。
+11. 交货前必须自查：所有门都要处在正确接壤位置，位置可读、可到达、不可漂浮，也不能在这轮重构里被擅自挪位。
+12. 仍然保持**分开开发**：每个 AI 只改自己那两张图，不抢别人的地图文件。
+
+交货前自查（强制）：
+
+1. 入口到出口至少有一条稳定可跑通路线，不存在死路或软锁。
+2. 所有陆地敌人都站在平面上，不出现悬空刷怪或脚下半空。
+3. 所有单向门、隐藏门、普通门都接在正确路线节点上，不是摆设。
+4. 所有门位保持正确且固定，不因这轮重构被随意移动。
+
+| Copilot / Resume | 分配地图 | 本轮重构重点 | 交付要求 |
 | --- | --- | --- | --- |
-| Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | `module_01`、`module_03` | 主线前段推进手感、门洞位置、节点房切图可读性 | 让玩家从出生点出来后的第一段流程最顺，特别是 `module_03` 的多方向出口要一眼看懂 |
-| Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | `module_02`、`module_04` | 战斗白盒、敌人站位、地面怪 / 飞行怪压测空间 | 保证这两张图既能打又不卡手，敌人刷点和平台高度要适合当前战斗系统 |
-| Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | `spawn_village`、`random_event_01` | 出生村层次、NPC / 事件占位、支线房折返路径、事件房敌人密度 | 保证 `spawn_village` 保持安全区属性，同时让平台可跳、空间宽松、NPC/事件点明确，并把白盒复杂度往《空洞骑士》质感上提一档 |
-| Copilot CLI（GPT-5.4） 待填写（当前会话 resume 退出后补） | `module_05`、`boss_room_01` | Boss 前氛围、终点房净空、整体视觉节奏 | 把 Boss 前通道和 Boss 房的“决战感”做出来，但仍保持白盒简洁 |
+| Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | `module_01`、`module_03` | 主线前段推进手感、首轮节奏建立、三向节点房拆路径 | `module_01` 必须从“能过去”改成“必须利用整段平台链推进”；`module_03` 必须把主线、捷径门、支线事件口拆成明确分层路线，不能贴地一口气横穿；两张图都必须保证从入口到所有主线出口存在稳定可跑通路线，并确保相关门位不移动、陆地敌人全部落在平面上 |
+| Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | `module_02`、`module_04` | 中段战斗模块化、纵向阻挡、房间内完整穿越路径 | 两张图都要从散平台改成“分段推进 + 分层清敌”；玩家不能从入口顺着底层一路跑到出口，至少要经历一次上抬、一次转层和一次被墙体逼出的绕路；禁止做出跳下后无路返回或无路前进的封死段，并在交货前确认门位正确固定、陆地敌人无悬空 |
+| Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | `spawn_village`、`module_05` | 基地可读性、捷径门记忆点、Boss 前长路径压迫感 | `spawn_village` 仍保持安全区，但主出口、两扇捷径门和生活区必须分层清楚；`module_05` 必须重构成真正的 Boss 前穿越模块，不能让玩家轻易横跑到出口，要通过墙体、平台链和守点敌人把路线拉长；两张图都必须避免把玩家卡进死角或单向封死区域，并把单向门/隐藏门接进正确路线，保持门位固定 |
+
+说明：
+
+- `random_event_01` 本轮冻结，不纳入这次主线房间重构。
+- `boss_room_01` 本轮冻结，继续留给 Boss 战正式接线时再单独处理。
+- 我这一位这轮不再占地图名额，只负责下发标准、同步 staff、看整体结构是否收口一致。
 
 ---
 
@@ -430,13 +733,19 @@
 - 完成击杀地面敌人后 +10 HKD 结算与玩家头顶 `+10` 飘字
 - 完成 Player HUD 的 HKD 显示接入
 - 完成 `module_02`、`module_04` 两张战斗白盒地图细化，提升平台层次、敌人站位和走位空间
+- 按最新 staff 标准完成 `module_02`、`module_04` 二次重构：两图都改成“分段推进 + 分层清敌 + 墙体逼绕路”，并保持门位固定、陆地敌人全部落在真实平面上
+- 完成 Boss 共用血量 / 硬直 / 5 秒硬直窗口框架，并新建 `BossSandbox`
+- 完成 `BossSandbox` 近战 Boss demo：横扫、冲刺斩、跳劈、受击、硬直、死亡、奖励结算均可单独验证
+- 完成 Boss 视觉语言第一轮统一：`!` / `=` / `/ \` / `^` / `*` / `. # < >` 已用于近战 Boss demo 的前摇、命中和短余波
+- 完成近战 Boss 视觉规格下沉：`Enemy.*` 现直接产出启动预警、命中帧、收招帧与位移落点，`BossSandbox` 不再维护第二套近战图样
+- 完成紧急任务 3：Soul 单个容器重绘修复，稳定单格填充和数值读数的 HUD 重绘
 - 更新 `docs/game_design.md` 与 `docs/parameter_tuning.md`
 - 已把阶段性代码推送到 GitHub
 
 **进行中**
 
 - 已认领并行任务 B：Boss 原型 / 敌人扩展 / 战斗结算层最小化
-- 接下来在 `include\enemy\Enemy.h`、`src\enemy\Enemy.cpp`、`include\combat\CombatSystem.h`、`src\combat\CombatSystem.cpp` 内补最小可接入版本
+- 已补出 `BossSandbox` 近战 Boss demo，并把这套近战技能规格下沉回 `Enemy.*`；接下来继续细化远程 Boss 分镜、Boss 房接线和主流程接入点
 - 保持参数文档和当前实装行为一致
 
 **待处理**
@@ -461,10 +770,16 @@
 - 当前击杀地面敌人后，玩家头顶会短暂显示 `+10` 飘字
 - `module_02`、`module_04` 当前按战斗白盒思路细化：平台必须可跳、敌人数量适中偏多、结构更接近《空洞骑士》式多层空间
 - 并行任务 B 当前只允许动 `Enemy.*` 与 `CombatSystem.*`，不直接改 `main.cpp` / 存档 / NPC 侧文件
+- 紧急任务 3 当前已在 `src\player\Player.cpp` 完成：Soul 单格填充固定为稳定位置，Soul 读数固定宽度输出
+- 新任务 B 当前已在 `BossSandbox` 落地近战 Boss demo，但正式刷进 `boss_room_01` 仍需主流程位后续接线
+- 当前 Boss demo 统一规则是：前摇必须先于判伤，不同招式必须用不同预警语言，命中帧最亮，收招帧极短
+- 近战 Boss 当前的横扫 / 冲刺斩 / 跳劈视觉规格已收口到 `Enemy.*`，后续若补主流程或别的 sandbox，应直接复用 Boss 模块接口
+- Boss 模块现已额外提供 `hasEncounterStarted()`、`isCombatActive()`、`consumeAttackSignal(...)`、`consumeDefeatReward(...)` 4 个主流程侧 hook
 
 **交接说明**
 
 - 如果下一位要接主流程，请先给 Boss 刷入 `boss_room_01` 和 `CombatSystem` 调用预留 hook，再接正式战斗入口
+- 主流程位接 Boss 时，优先按 `getState()` / `hasEncounterStarted()` 切开场对白，再按 `isCombatActive()` 放战斗输入，最后用 `consumeDefeatReward(...)` 接胜利结算
 - 如果下一位要继续做敌人，就优先补 Boss 原型的完整攻击节奏、统一掉落、奖励发放和主线战斗结算
 - 如果下一位要先做玩家战斗，就优先把玩家攻击、受伤、无敌帧与主程序 / EnemySandbox / 敌人模块彻底打通，并把临时写在 Player 里的击杀奖励逻辑迁到中间结算层
 - 文档更新时，优先同步 `docs/game_design.md`、`docs/parameter_tuning.md`、`docs/module_checklist.md`
@@ -528,6 +843,9 @@
 - 已把 `NpcSystem` 正式接进 `src\core\main.cpp` 运行时，`E` 可触发真实 NPC 交互
 - 已补上商店内 `W/S` 选项、`J` 购买、`E` 关闭，并在交互后同步存档侧数据
 - 已补齐 `Makefile` / `run.bat` 的 `src\npc\NpcSystem.cpp` 构建项，避免主程序重新编译时断链
+- 已修正 `spawn_village` 里两扇单向捷径门的村侧门位：`module_05` 门贴到左边界，`module_03` 门贴到下层地面，不再悬空
+- 已重做 `module_01` 的主路径平台链，保留两端门位不动，并用多段墙体把推进节奏收成“上去 -> 横移 -> 下来 -> 再上去 -> 落门口”
+- 已重做 `module_03` 的三向节点路线：把主线左出口、上方捷径门和下方事件口拆成明显分层，并用两端底层阻挡切掉贴地横穿
 
 **进行中**
 
@@ -657,6 +975,7 @@
 - 灵魂 / 法术 / HUD 参数同步
 - 主线 `Player.cpp` 战斗与表现接入
 - `module_01` / `module_03` 地图细化
+- Boss 房主流程接线 / 入场对话 / 胜利结算
 
 **工作目标**
 
@@ -684,6 +1003,7 @@
 - 细化 `module_01` / `module_03`：补足可跳平台层次、增加适中偏多的地面怪 / 飞行怪，并保留主线门洞与跑图空间
 - 更新 `src/core/main.cpp`、`run.bat`、`docs/module_checklist.md` 以匹配新的主线玩家逻辑
 - 将灵魂 HUD 重构为小魂球容器，并修正顶部字符显示问题
+- 已把 `boss_room_01` 接成正式 demo 终点：首次入房先播 3 句 Boss 入场对白，按 `ENTER` 推进；对白结束后正式激活 Boss 战，期间封住退路；Boss 死亡后显示 `VICTORY`、击败提示与 HKD 奖励；玩家若战败则仍按现有存档 / 死亡恢复链路回到房间入口重来，不会卡死流程
 
 **进行中**
 
@@ -694,7 +1014,7 @@
 - 玩家状态机
 - 受伤击退
 - 更完整的主线敌人 / 玩家战斗联动
-- 继续配合主线跑图验证 `module_01` / `module_03` 的房间节奏与节点可读性
+- 继续配合主线整线跑图验证（重点看 `boss_room_01` 闭环、各门位、NPC、存档和前后模块衔接）
 
 **阻塞 / 风险**
 

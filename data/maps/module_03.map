@@ -10,11 +10,13 @@ from_random_event_01,50,16
 from_spawn_village_shortcut,36,1
 
 [enemy_spawns]
-ground_enemy_basic,14,16
-flying_enemy_basic,24,8
-ground_enemy_basic,35,16
-flying_enemy_basic,44,5
-ground_enemy_basic,60,16
+ground_enemy_basic,10,12
+ground_enemy_basic,20,10
+flying_enemy_basic,31,5
+ground_enemy_basic,37,8
+flying_enemy_basic,47,7
+ground_enemy_basic,54,10
+ground_enemy_basic,66,12
 
 [npc_placements]
 
@@ -29,19 +31,19 @@ module_03,spawn_village,from_module_03_shortcut,37,1
 =                                                                          =
 =                                ========                                  =
 =                                                                          =
-=                 =========                     =========                  =
+=                              ============                                =
 =                                                                          =
-=                                           =========                      =
-=          =========                                                       =
+=                           =================                              =
 =                                                                          =
-=                        ==========                      =========         =
 =                                                                          =
-=                                   =========                              =
-=                                                                          =
-=            =========                                  =========          =
-=                                                                          =
-=                                                      ========            =
-=                                                                          =
+=                       =========================                          =
+=                       ==                      ==                         =
+=              ===========                      ============               =
+=              ===      ==                      ==        ===              =
+=     ============      ==                      ==        ============     =
+=              ===                            ==    ==    ===              =
+=              ===                            ==    ==    ===              =
+=              ===                            ==    ==    ===              =
 ============================================================================
 =                                                                          =
 ============================================================================

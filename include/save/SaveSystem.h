@@ -14,6 +14,8 @@ struct SaveData {
     std::string currentMapId;
     std::string respawnMapId;
     std::vector<std::string> defeatedBossIds;
+    std::vector<std::string> unlockedShortcutIds;
+    std::vector<std::string> unlockedSkillIds;
     int completionTimeSeconds = 0;
     bool hasActiveRun = false;
 };

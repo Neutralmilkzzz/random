@@ -40,6 +40,7 @@ void KeyStateManager::readKeys() {
     }
 
     keyStates[' '] = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+    keyStates[0x10] = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
     keyStates[0x0D] = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
     keyStates[0x1B] = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
 #else

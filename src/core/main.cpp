@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <sstream>
@@ -23,7 +24,16 @@ const int kTitleScreenHeight = 24;
 const int kTitleUnavailableHintFrames = 90;
 const int kTitleStartTransitionFrames = 24;
 const int kFlyingProjectileStepFrames = 3;
-const char* kDefaultRuntimePrompt = "Move with A/D and SPACE. Press E near doors or NPCs.";
+const char* kDefaultRuntimePrompt = "Move with A/D, jump with SPACE, dash with SHIFT. Press E near doors or NPCs.";
+const char* kShortcutSpawnModule03 = "shortcut_spawn_module_03";
+const char* kShortcutSpawnModule05 = "shortcut_spawn_module_05";
+const char* kSkillDoubleJump = "double_jump";
+const char* kBossRoom01MapId = "boss_room_01";
+const char* kBossRoom01BossId = "boss_room_01_guardian";
+const char* kBossRoom01BossName = "Hall Guardian";
+const int kBossMeleeRange = 2;
+const int kBossHorizontalWaveRange = 12;
+const int kBossVerticalSpellRange = 8;
 
 struct EnemyProjectile {
     game::Position position;
@@ -37,6 +47,46 @@ struct EnemyProjectile {
           dy(0),
           stepCooldown(0),
           remainingFrames(0) {
+    }
+};
+
+struct BossImpact {
+    std::vector<game::BossVisualGlyph> activeGlyphs;
+    std::vector<game::BossVisualGlyph> fadeGlyphs;
+    std::vector<game::Position> damageCells;
+    int activeFramesRemaining;
+    int fadeFramesRemaining;
+    std::string label;
+
+    BossImpact()
+        : activeFramesRemaining(0),
+          fadeFramesRemaining(0) {
+    }
+};
+
+struct BossEncounterState {
+    bool active;
+    bool dialogueActive;
+    bool battleActive;
+    bool victoryActive;
+    int dialogueIndex;
+    int rewardHkd;
+    std::string bossId;
+    std::string bossName;
+    std::vector<std::string> dialogueLines;
+    std::vector<BossImpact> impacts;
+    game::MeleeBoss boss;
+
+    BossEncounterState()
+        : active(false),
+          dialogueActive(false),
+          battleActive(false),
+          victoryActive(false),
+          dialogueIndex(0),
+          rewardHkd(0),
+          bossId(kBossRoom01BossId),
+          bossName(kBossRoom01BossName),
+          boss(kBossRoom01BossId, game::Position()) {
     }
 };
 
@@ -56,6 +106,7 @@ struct RuntimeState {
     std::string shopNpcId;
     std::vector<game::ShopOffer> shopOffers;
     int shopSelection;
+    std::string bossStatus;
     std::unordered_map<int, bool> previousKeys;
 
     RuntimeState()
@@ -406,6 +457,10 @@ void spawnEnemiesFromMap(const game::MapDefinition& mapDefinition,
     groundEnemies.clear();
     flyingEnemies.clear();
 
+    if (mapDefinition.id == kBossRoom01MapId) {
+        return;
+    }
+
     for (size_t index = 0; index < mapDefinition.enemySpawns.size(); ++index) {
         if (isGroundEnemyTemplate(mapDefinition.enemySpawns[index].enemyTemplateId)) {
             groundEnemies.push_back(
@@ -453,11 +508,403 @@ void syncSaveDataWithRuntime(const Player& player,
     saveData.hasActiveRun = true;
 }
 
+std::string skillIdToSaveKey(game::SkillId skillId) {
+    switch (skillId) {
+    case game::SkillId::DoubleJump:
+        return kSkillDoubleJump;
+    default:
+        return std::string();
+    }
+}
+
+bool hasUnlockedSkill(const game::SaveData& saveData, game::SkillId skillId) {
+    const std::string key = skillIdToSaveKey(skillId);
+    return !key.empty() &&
+           std::find(saveData.unlockedSkillIds.begin(),
+                     saveData.unlockedSkillIds.end(),
+                     key) != saveData.unlockedSkillIds.end();
+}
+
+void unlockSkill(game::SaveData& saveData, game::SkillId skillId) {
+    const std::string key = skillIdToSaveKey(skillId);
+    if (key.empty() ||
+        std::find(saveData.unlockedSkillIds.begin(), saveData.unlockedSkillIds.end(), key) !=
+                saveData.unlockedSkillIds.end()) {
+        return;
+    }
+
+    saveData.unlockedSkillIds.push_back(key);
+}
+
+void applyPersistentSkillsToPlayer(Player& player, const game::SaveData& saveData) {
+    player.setDoubleJumpUnlocked(hasUnlockedSkill(saveData, game::SkillId::DoubleJump));
+}
+
+std::vector<game::ShopOffer> filterShopOffersForSave(const std::vector<game::ShopOffer>& offers,
+                                                     const game::SaveData& saveData) {
+    std::vector<game::ShopOffer> filtered;
+    for (size_t index = 0; index < offers.size(); ++index) {
+        if (offers[index].unlocksSkill && hasUnlockedSkill(saveData, offers[index].unlockedSkill)) {
+            continue;
+        }
+        filtered.push_back(offers[index]);
+    }
+    return filtered;
+}
+
+std::string getShortcutDoorId(const game::MapTransition& transition) {
+    if ((transition.fromMapId == "spawn_village" && transition.toMapId == "module_03") ||
+        (transition.fromMapId == "module_03" && transition.toMapId == "spawn_village")) {
+        return kShortcutSpawnModule03;
+    }
+
+    if ((transition.fromMapId == "spawn_village" && transition.toMapId == "module_05") ||
+        (transition.fromMapId == "module_05" && transition.toMapId == "spawn_village")) {
+        return kShortcutSpawnModule05;
+    }
+
+    return std::string();
+}
+
+bool isShortcutUnlocked(const game::SaveData& saveData, const std::string& shortcutId) {
+    return !shortcutId.empty() &&
+           std::find(saveData.unlockedShortcutIds.begin(),
+                     saveData.unlockedShortcutIds.end(),
+                     shortcutId) != saveData.unlockedShortcutIds.end();
+}
+
+bool isShortcutVillageSide(const game::MapTransition& transition) {
+    return transition.fromMapId == "spawn_village" && !getShortcutDoorId(transition).empty();
+}
+
+bool isLockedVillageShortcut(const game::SaveData& saveData, const game::MapTransition& transition) {
+    const std::string shortcutId = getShortcutDoorId(transition);
+    return !shortcutId.empty() &&
+           isShortcutVillageSide(transition) &&
+           !isShortcutUnlocked(saveData, shortcutId);
+}
+
+bool isRemoteUnlockShortcut(const game::SaveData& saveData, const game::MapTransition& transition) {
+    const std::string shortcutId = getShortcutDoorId(transition);
+    return !shortcutId.empty() &&
+           !isShortcutVillageSide(transition) &&
+           !isShortcutUnlocked(saveData, shortcutId);
+}
+
+char getTransitionGlyph(const game::SaveData& saveData, const game::MapTransition& transition) {
+    if (isLockedVillageShortcut(saveData, transition)) {
+        return 'L';
+    }
+
+    if (isRemoteUnlockShortcut(saveData, transition)) {
+        return 'U';
+    }
+
+    return 'D';
+}
+
+std::string buildTransitionPrompt(const game::SaveData& saveData, const game::MapTransition& transition) {
+    if (isLockedVillageShortcut(saveData, transition)) {
+        return "Press E to inspect locked shortcut.";
+    }
+
+    if (isRemoteUnlockShortcut(saveData, transition)) {
+        return "Press E to unlock shortcut door.";
+    }
+
+    return "Press E to use door.";
+}
+
+bool isBossRoom01(const game::MapDefinition& mapDefinition) {
+    return mapDefinition.id == kBossRoom01MapId;
+}
+
+std::string bossStateLabel(game::BossState state) {
+    switch (state) {
+    case game::BossState::Dormant:
+        return "Dormant";
+    case game::BossState::Intro:
+        return "Intro";
+    case game::BossState::Positioning:
+        return "Positioning";
+    case game::BossState::AttackStartup:
+        return "Startup";
+    case game::BossState::AttackRecovery:
+        return "Recovery";
+    case game::BossState::Staggered:
+        return "Staggered";
+    case game::BossState::Dead:
+        return "Dead";
+    }
+
+    return "Unknown";
+}
+
+std::vector<std::string> splitMapRows(const std::string& map) {
+    std::vector<std::string> rows;
+    std::istringstream stream(map);
+    std::string line;
+    while (std::getline(stream, line)) {
+        rows.push_back(line);
+    }
+    return rows;
+}
+
+void overlayCenteredLines(std::string& map, int startRow, const std::vector<std::string>& lines) {
+    std::vector<std::string> rows = splitMapRows(map);
+    for (size_t index = 0; index < lines.size(); ++index) {
+        placeCenteredLine(rows, startRow + static_cast<int>(index), lines[index]);
+    }
+    map = joinTerrainRows(rows);
+}
+
+bool isBossDefeated(const game::SaveData& saveData, const std::string& bossId) {
+    return !bossId.empty() &&
+           std::find(saveData.defeatedBossIds.begin(),
+                     saveData.defeatedBossIds.end(),
+                     bossId) != saveData.defeatedBossIds.end();
+}
+
+bool canBossOccupy(const std::string& terrainMap,
+                   const game::Position& playerPosition,
+                   const game::Position& targetPosition) {
+    if (!isInsidePlayableArea(terrainMap, targetPosition)) {
+        return false;
+    }
+
+    if (tileAt(terrainMap, targetPosition) != ' ') {
+        return false;
+    }
+
+    return !(targetPosition.x == playerPosition.x && targetPosition.y == playerPosition.y);
+}
+
+bool hasBossAnchorSpace(const std::string& terrainMap, const game::Position& anchor) {
+    for (int dy = -5; dy <= 2; ++dy) {
+        for (int dx = -4; dx <= 4; ++dx) {
+            const game::Position candidate(anchor.x + dx, anchor.y + dy);
+            if (!isInsidePlayableArea(terrainMap, candidate) || tileAt(terrainMap, candidate) != ' ') {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+game::Position findBossSpawnPosition(const std::string& terrainMap) {
+    const int width = static_cast<int>(lineWidth(terrainMap)) - 1;
+    const int height = width <= 0 ? 0 : static_cast<int>((terrainMap.length() + 1) / lineWidth(terrainMap));
+    const int centerX = width / 2;
+
+    for (int offset = 0; offset < width / 2; ++offset) {
+        const int candidates[2] = {centerX - offset, centerX + offset};
+        for (int candidateIndex = 0; candidateIndex < 2; ++candidateIndex) {
+            const int x = candidates[candidateIndex];
+            if (x <= 4 || x >= width - 4) {
+                continue;
+            }
+
+            for (int y = std::max(6, height - 6); y >= 6; --y) {
+                const game::Position anchor(x, y);
+                if (!hasBossAnchorSpace(terrainMap, anchor)) {
+                    continue;
+                }
+                return anchor;
+            }
+        }
+    }
+
+    return game::Position(std::max(6, centerX), std::max(6, height / 2));
+}
+
+BossImpact toBossImpact(const game::BossAttackVisual& visual) {
+    BossImpact impact;
+    impact.damageCells = visual.damageCells;
+    impact.activeFramesRemaining = visual.activeFrames;
+    impact.fadeFramesRemaining = visual.fadeFrames;
+    impact.label = visual.label;
+    impact.activeGlyphs = visual.activeGlyphs;
+    impact.fadeGlyphs = visual.fadeGlyphs;
+    return impact;
+}
+
+void applyBossImpactIfPlayerInside(const BossImpact& impact,
+                                   const game::Position& playerPosition,
+                                   Player& player) {
+    for (size_t index = 0; index < impact.damageCells.size(); ++index) {
+        if (impact.damageCells[index].x == playerPosition.x &&
+            impact.damageCells[index].y == playerPosition.y) {
+            player.receiveDamage(impact.label.empty() ? "Boss attack" : impact.label, playerPosition);
+            return;
+        }
+    }
+}
+
+void updateBossImpacts(BossEncounterState& bossEncounter) {
+    std::vector<BossImpact> nextImpacts;
+    nextImpacts.reserve(bossEncounter.impacts.size());
+
+    for (size_t index = 0; index < bossEncounter.impacts.size(); ++index) {
+        BossImpact impact = bossEncounter.impacts[index];
+        if (impact.activeFramesRemaining > 0) {
+            impact.activeFramesRemaining--;
+            nextImpacts.push_back(impact);
+            continue;
+        }
+
+        if (impact.fadeFramesRemaining > 0) {
+            impact.fadeFramesRemaining--;
+            if (impact.fadeFramesRemaining > 0) {
+                nextImpacts.push_back(impact);
+            }
+        }
+    }
+
+    bossEncounter.impacts.swap(nextImpacts);
+}
+
+void resolveBossSignal(const std::string& terrainMap,
+                       const game::Position& playerPosition,
+                       BossEncounterState& bossEncounter,
+                       const game::BossAttackSignal& signal,
+                       RuntimeState& state,
+                       Player& player) {
+    const game::BossAttackVisual attackVisual = bossEncounter.boss.buildResolvedAttackVisual(signal);
+    if (attackVisual.activeGlyphs.empty() &&
+        attackVisual.fadeGlyphs.empty() &&
+        attackVisual.damageCells.empty()) {
+        return;
+    }
+
+    BossImpact impact = toBossImpact(attackVisual);
+    applyBossImpactIfPlayerInside(impact, playerPosition, player);
+    bossEncounter.impacts.push_back(impact);
+
+    if (attackVisual.hasLandingPosition &&
+        isInsidePlayableArea(terrainMap, attackVisual.landingPosition) &&
+        tileAt(terrainMap, attackVisual.landingPosition) == ' ' &&
+        !(attackVisual.landingPosition.x == playerPosition.x &&
+          attackVisual.landingPosition.y == playerPosition.y)) {
+        bossEncounter.boss.setPosition(attackVisual.landingPosition);
+    }
+
+    if (signal.type == game::BossAttackType::SweepSlash) {
+        state.lastInteraction = bossEncounter.bossName + " released a sweep slash.";
+    } else if (signal.type == game::BossAttackType::DashSlash) {
+        state.lastInteraction = bossEncounter.bossName + " burst forward with a dash slash.";
+    } else if (signal.type == game::BossAttackType::JumpSlash) {
+        state.lastInteraction = bossEncounter.bossName + " crashed down with a jump slash.";
+    }
+}
+
+bool isBossInFrontRange(const game::Position& playerPosition,
+                        const game::Position& bossPosition,
+                        game::FacingDirection facingDirection,
+                        int range) {
+    const int deltaX = bossPosition.x - playerPosition.x;
+    const int deltaY = std::abs(bossPosition.y - playerPosition.y);
+    if (deltaY > 1) {
+        return false;
+    }
+
+    if (facingDirection == game::FacingDirection::Right) {
+        return deltaX >= 1 && deltaX <= range;
+    }
+
+    return deltaX <= -1 && deltaX >= -range;
+}
+
+bool isBossInVerticalSlashRange(const game::Position& playerPosition,
+                                const game::Position& bossPosition,
+                                bool aimingUp) {
+    const int deltaX = std::abs(bossPosition.x - playerPosition.x);
+    const int deltaY = bossPosition.y - playerPosition.y;
+    if (deltaX > 1) {
+        return false;
+    }
+
+    if (aimingUp) {
+        return deltaY <= -1 && deltaY >= -2;
+    }
+
+    return deltaY >= 1 && deltaY <= 2;
+}
+
+bool isBossInVerticalSpellRange(const game::Position& playerPosition,
+                                const game::Position& bossPosition,
+                                bool aimingUp) {
+    const int deltaX = std::abs(bossPosition.x - playerPosition.x);
+    const int deltaY = bossPosition.y - playerPosition.y;
+    if (deltaX > 1) {
+        return false;
+    }
+
+    if (aimingUp) {
+        return deltaY < 0 && deltaY >= -kBossVerticalSpellRange;
+    }
+
+    return deltaY > 0 && deltaY <= kBossVerticalSpellRange;
+}
+
+void initializeBossEncounter(const game::MapDefinition& mapDefinition,
+                             const std::string& terrainMap,
+                             const game::SaveData& saveData,
+                             RuntimeState& state,
+                             BossEncounterState& bossEncounter) {
+    bossEncounter = BossEncounterState();
+    state.bossStatus.clear();
+
+    if (!isBossRoom01(mapDefinition) || isBossDefeated(saveData, kBossRoom01BossId)) {
+        if (isBossRoom01(mapDefinition) && isBossDefeated(saveData, kBossRoom01BossId)) {
+            state.lastInteraction = "The arena stands silent after the victory.";
+        }
+        return;
+    }
+
+    bossEncounter.active = true;
+    bossEncounter.dialogueActive = true;
+    bossEncounter.battleActive = false;
+    bossEncounter.victoryActive = false;
+    bossEncounter.dialogueIndex = 0;
+    bossEncounter.rewardHkd = 0;
+    bossEncounter.dialogueLines.push_back("So the village sends another soul.");
+    bossEncounter.dialogueLines.push_back("Step forward. Let this hall judge your strength.");
+    bossEncounter.dialogueLines.push_back("Press ENTER. The duel begins when you accept.");
+    bossEncounter.boss = game::MeleeBoss(kBossRoom01BossId, findBossSpawnPosition(terrainMap));
+    state.lastInteraction = bossEncounter.bossName + " waits ahead.";
+}
+
+void updateBossPrompt(RuntimeState& state, const BossEncounterState& bossEncounter) {
+    if (!bossEncounter.active) {
+        state.bossStatus.clear();
+        return;
+    }
+
+    if (bossEncounter.dialogueActive) {
+        state.prompt = "ENTER continue dialogue.";
+    } else if (bossEncounter.victoryActive) {
+        state.prompt = "ENTER close victory screen.";
+    } else if (bossEncounter.battleActive) {
+        state.prompt = "Defeat the boss. The exit stays sealed until victory.";
+    }
+
+    std::ostringstream bossStatus;
+    bossStatus << bossEncounter.bossName
+               << " HP "
+               << bossEncounter.boss.getStats().health.current
+               << "/" << bossEncounter.boss.getStats().health.maximum
+               << " | State " << bossStateLabel(bossEncounter.boss.getState())
+               << " | Stagger " << bossEncounter.boss.getStaggerDamage()
+               << "/" << bossEncounter.boss.getStaggerThreshold();
+    state.bossStatus = bossStatus.str();
+}
+
 std::string buildCollisionMap(const std::string& terrainMap,
                               const game::Position& playerPosition,
                               const game::MapDefinition& mapDefinition,
                               const std::vector<game::GroundEnemy>& groundEnemies,
-                              const std::vector<game::FlyingEnemy>& flyingEnemies) {
+                              const std::vector<game::FlyingEnemy>& flyingEnemies,
+                              const BossEncounterState* bossEncounter) {
     std::string collisionMap = terrainMap;
 
     for (size_t index = 0; index < mapDefinition.npcPlacements.size(); ++index) {
@@ -478,6 +925,13 @@ std::string buildCollisionMap(const std::string& terrainMap,
         }
     }
 
+    if (bossEncounter != 0 &&
+        bossEncounter->active &&
+        bossEncounter->battleActive &&
+        bossEncounter->boss.isAlive()) {
+        placeGlyph(collisionMap, bossEncounter->boss.getPosition(), bossEncounter->boss.getRenderGlyph());
+    }
+
     placeGlyph(collisionMap, playerPosition, '@');
     return collisionMap;
 }
@@ -485,13 +939,17 @@ std::string buildCollisionMap(const std::string& terrainMap,
 std::string buildRenderMap(const std::string& terrainMap,
                            const game::Position& playerPosition,
                            const game::MapDefinition& mapDefinition,
+                           const game::SaveData& saveData,
                            const std::vector<game::GroundEnemy>& groundEnemies,
                            const std::vector<game::FlyingEnemy>& flyingEnemies,
-                           const std::vector<EnemyProjectile>& enemyProjectiles) {
+                           const std::vector<EnemyProjectile>& enemyProjectiles,
+                           const BossEncounterState* bossEncounter) {
     std::string renderMap = terrainMap;
 
     for (size_t index = 0; index < mapDefinition.transitions.size(); ++index) {
-        placeGlyph(renderMap, mapDefinition.transitions[index].triggerPosition, 'D');
+        placeGlyph(renderMap,
+                   mapDefinition.transitions[index].triggerPosition,
+                   getTransitionGlyph(saveData, mapDefinition.transitions[index]));
     }
 
     for (size_t index = 0; index < mapDefinition.npcPlacements.size(); ++index) {
@@ -536,6 +994,31 @@ std::string buildRenderMap(const std::string& terrainMap,
         placeGlyph(renderMap, enemyProjectiles[index].position, '*');
     }
 
+    if (bossEncounter != 0) {
+        for (size_t index = 0; index < bossEncounter->impacts.size(); ++index) {
+            const std::vector<game::BossVisualGlyph>& glyphs = bossEncounter->impacts[index].activeFramesRemaining > 0
+                    ? bossEncounter->impacts[index].activeGlyphs
+                    : bossEncounter->impacts[index].fadeGlyphs;
+            for (size_t glyphIndex = 0; glyphIndex < glyphs.size(); ++glyphIndex) {
+                placeGlyph(renderMap, glyphs[glyphIndex].position, glyphs[glyphIndex].glyph);
+            }
+        }
+
+        if (bossEncounter->active && bossEncounter->boss.isRenderable()) {
+            const std::vector<game::BossVisualGlyph> bodyVisual = bossEncounter->boss.buildBodyVisual();
+            for (size_t index = 0; index < bodyVisual.size(); ++index) {
+                placeGlyph(renderMap, bodyVisual[index].position, bodyVisual[index].glyph);
+            }
+
+            if (bossEncounter->boss.getState() == game::BossState::AttackStartup) {
+                const std::vector<game::BossVisualGlyph> startupVisual = bossEncounter->boss.buildStartupVisual();
+                for (size_t index = 0; index < startupVisual.size(); ++index) {
+                    placeGlyph(renderMap, startupVisual[index].position, startupVisual[index].glyph);
+                }
+            }
+        }
+    }
+
     placeGlyph(renderMap, playerPosition, '@');
     return renderMap;
 }
@@ -561,6 +1044,7 @@ const game::MapTransition* findInteractableTransition(const game::MapDefinition&
 }
 
 void updatePrompt(const game::MapDefinition& mapDefinition,
+                  const game::SaveData& saveData,
                   const game::Position& playerPosition,
                   RuntimeState& state) {
     if (state.shopOpen) {
@@ -577,22 +1061,30 @@ void updatePrompt(const game::MapDefinition& mapDefinition,
 
     const game::MapTransition* transition = findInteractableTransition(mapDefinition, playerPosition);
     if (transition != 0) {
-        state.prompt = "Press E to use door.";
+        state.prompt = buildTransitionPrompt(saveData, *transition);
         return;
     }
 
     state.prompt = kDefaultRuntimePrompt;
 }
 
-std::string buildBottomFooter(const RuntimeState& state) {
+std::string buildBottomFooter(const RuntimeState& state, const game::SaveData& saveData) {
     std::ostringstream footer;
     footer << "\n";
-    footer << "A/D Move  SPACE Jump  W/S Aim  J Attack  K Spell  R Heal  P Reset  ESC Exit";
+    footer << "A/D Move  SPACE Jump  SHIFT Dash  W/S Aim";
+    if (hasUnlockedSkill(saveData, game::SkillId::DoubleJump)) {
+        footer << "  SPACE Double Jump";
+    }
+    footer << "\n";
+    footer << "J Attack  K Spell  R Heal  P Reset  ESC Exit";
     if (state.prompt != kDefaultRuntimePrompt) {
         footer << "\n" << state.prompt;
     }
     if (!state.lastInteraction.empty()) {
         footer << "\n" << state.lastInteraction;
+    }
+    if (!state.bossStatus.empty()) {
+        footer << "\n" << state.bossStatus;
     }
     if (state.shopOpen) {
         for (size_t index = 0; index < state.shopOffers.size(); ++index) {
@@ -622,7 +1114,7 @@ void applyNpcInteraction(const std::string& npcId,
     state.lastInteraction = result.speaker + ": " + result.text;
     state.shopOpen = result.opensShop;
     state.shopNpcId = result.opensShop ? npcId : std::string();
-    state.shopOffers = result.offers;
+    state.shopOffers = filterShopOffersForSave(result.offers, saveData);
     state.shopSelection = 0;
 }
 
@@ -639,9 +1131,133 @@ void applyShopPurchase(Player& player,
     const game::ShopOffer& selectedOffer = state.shopOffers[static_cast<size_t>(state.shopSelection)];
     const game::NpcInteractionResult result =
             game::purchaseNpcOffer(state.shopNpcId, selectedOffer.id, stats);
+    if (result.unlockedSkillGranted) {
+        unlockSkill(saveData, result.grantedSkill);
+        applyPersistentSkillsToPlayer(player, saveData);
+    }
     player.restoreSavedStats(stats);
+    applyPersistentSkillsToPlayer(player, saveData);
     saveData.playerStats = stats;
+    state.shopOffers = filterShopOffersForSave(result.offers, saveData);
+    if (state.shopSelection >= static_cast<int>(state.shopOffers.size())) {
+        state.shopSelection = std::max(0, static_cast<int>(state.shopOffers.size()) - 1);
+    }
     state.lastInteraction = result.speaker + ": " + result.text;
+}
+
+void resolveBossVictory(Player& player,
+                        RuntimeState& state,
+                        game::SaveData& saveData,
+                        game::GameSession& gameSession,
+                        game::SaveSystem& saveSystem,
+                        BossEncounterState& bossEncounter,
+                        const game::CombatSystem& combatSystem) {
+    game::RewardResolution reward;
+    if (!bossEncounter.boss.consumeDefeatReward(reward)) {
+        reward = combatSystem.buildEnemyReward(bossEncounter.boss);
+    }
+
+    game::CharacterStats rewardedStats = player.getStats();
+    combatSystem.applyReward(rewardedStats, reward);
+    player.restoreSavedStats(rewardedStats);
+    applyPersistentSkillsToPlayer(player, saveData);
+
+    syncSaveDataWithRuntime(player, state, gameSession, saveData);
+    gameSession.setActiveSave(saveData);
+    gameSession.markBossDefeated(bossEncounter.bossId);
+    saveData = gameSession.getActiveSave();
+    saveSystem.saveOnMapEntry(saveData);
+
+    bossEncounter.battleActive = false;
+    bossEncounter.victoryActive = true;
+    bossEncounter.rewardHkd = reward.hkdGranted;
+    state.lastInteraction = bossEncounter.bossName + " fell. The chamber is yours.";
+}
+
+void tryResolvePlayerHitOnBoss(const game::Position& playerPosition,
+                               const game::CharacterStats& statsBeforeCombat,
+                               Player& player,
+                               RuntimeState& state,
+                               game::SaveData& saveData,
+                               game::GameSession& gameSession,
+                               game::SaveSystem& saveSystem,
+                               const KeyStateManager& keyStateManager,
+                               BossEncounterState& bossEncounter) {
+    if (!bossEncounter.active ||
+        !bossEncounter.battleActive ||
+        !bossEncounter.boss.isAlive() ||
+        bossEncounter.victoryActive ||
+        playerPosition.x < 0 ||
+        playerPosition.y < 0) {
+        return;
+    }
+
+    const bool aimingUp = isKeyDown(keyStateManager, 'w') || isKeyDown(keyStateManager, 'W');
+    const bool aimingDown = isKeyDown(keyStateManager, 's') || isKeyDown(keyStateManager, 'S');
+    const bool physicalPressed = isJustPressed(keyStateManager, state.previousKeys, 'j') ||
+                                 isJustPressed(keyStateManager, state.previousKeys, 'J');
+    const bool spellPressed = isJustPressed(keyStateManager, state.previousKeys, 'k') ||
+                              isJustPressed(keyStateManager, state.previousKeys, 'K');
+    const game::Position bossPosition = bossEncounter.boss.getPosition();
+
+    game::AttackDefinition attack;
+    bool shouldResolve = false;
+
+    if (physicalPressed) {
+        attack.damage = game::DamageInfo(1,
+                                         aimingUp ? game::DamageType::UpSlash
+                                                  : (aimingDown ? game::DamageType::DownSlash
+                                                                : game::DamageType::BasicAttack),
+                                         "player",
+                                         true);
+        attack.soulGainOnHit = (!aimingUp && !aimingDown) ? 11 : 0;
+
+        if (aimingUp || aimingDown) {
+            shouldResolve = isBossInVerticalSlashRange(playerPosition, bossPosition, aimingUp);
+        } else {
+            shouldResolve = isBossInFrontRange(playerPosition,
+                                               bossPosition,
+                                               player.getFacingDirection(),
+                                               kBossMeleeRange);
+        }
+    } else if (spellPressed && player.getStats().soul.current < statsBeforeCombat.soul.current) {
+        attack.damage = game::DamageInfo(1,
+                                         aimingUp ? game::DamageType::SoulWaveUp
+                                                  : (aimingDown ? game::DamageType::SoulSlam
+                                                                : game::DamageType::SoulWaveHorizontal),
+                                         "player",
+                                         false);
+
+        if (aimingUp || aimingDown) {
+            shouldResolve = isBossInVerticalSpellRange(playerPosition, bossPosition, aimingUp);
+        } else {
+            shouldResolve = isBossInFrontRange(playerPosition,
+                                               bossPosition,
+                                               player.getFacingDirection(),
+                                               kBossHorizontalWaveRange);
+        }
+    }
+
+    if (!shouldResolve) {
+        return;
+    }
+
+    game::CombatSystem combatSystem;
+    const game::DamageResolution resolution = combatSystem.resolveAttack(bossEncounter.boss, attack);
+    if (!resolution.hitApplied) {
+        return;
+    }
+
+    if (resolution.targetDefeated) {
+        resolveBossVictory(player, state, saveData, gameSession, saveSystem, bossEncounter, combatSystem);
+        return;
+    }
+
+    if (bossEncounter.boss.shouldEnterStagger()) {
+        state.lastInteraction = bossEncounter.bossName + " stagger threshold reached.";
+    } else {
+        state.lastInteraction = bossEncounter.bossName + " took " + std::to_string(resolution.damageApplied) + " damage.";
+    }
 }
 
 bool canEnemyOccupy(const std::string& terrainMap,
@@ -840,6 +1456,7 @@ int main() {
     std::vector<game::GroundEnemy> groundEnemies;
     std::vector<game::FlyingEnemy> flyingEnemies;
     std::vector<EnemyProjectile> enemyProjectiles;
+    BossEncounterState bossEncounter;
     game::GroundEnemy dummyGroundEnemy("dummy_ground", game::Position(-100, -100));
     game::FlyingEnemy dummyFlyingEnemy("dummy_flying", game::Position(-100, -100));
     game::MapDefinition currentMapDefinition;
@@ -862,7 +1479,9 @@ int main() {
         saveSystem.saveOnMapEntry(saveData);
     }
 
+    applyPersistentSkillsToPlayer(player, saveData);
     player.restoreSavedStats(saveData.playerStats);
+    applyPersistentSkillsToPlayer(player, saveData);
     currentMapDefinition = mapLoader.loadMap(saveData.currentMapId.empty() ? "spawn_village" : saveData.currentMapId);
     loadMapState(currentMapDefinition,
                  saveData.respawnMapId.empty() ? "player_start" : saveData.respawnMapId,
@@ -873,6 +1492,7 @@ int main() {
                  groundEnemies,
                  flyingEnemies,
                  enemyProjectiles);
+    initializeBossEncounter(currentMapDefinition, terrainMap, saveData, state, bossEncounter);
     syncSaveDataWithRuntime(player, state, gameSession, saveData);
     gameSession.setActiveSave(saveData);
     saveSystem.saveOnMapEntry(saveData);
@@ -885,9 +1505,29 @@ int main() {
             break;
         }
 
+        if (bossEncounter.active &&
+            bossEncounter.dialogueActive &&
+            isJustPressed(keyStateManager, state.previousKeys, 0x0D)) {
+            bossEncounter.dialogueIndex++;
+            if (bossEncounter.dialogueIndex >= static_cast<int>(bossEncounter.dialogueLines.size())) {
+                bossEncounter.dialogueActive = false;
+                bossEncounter.battleActive = true;
+                state.lastInteraction = bossEncounter.bossName + ": Then come. Let the chamber decide.";
+            }
+        } else if (bossEncounter.active &&
+                   bossEncounter.victoryActive &&
+                   isJustPressed(keyStateManager, state.previousKeys, 0x0D)) {
+            bossEncounter.victoryActive = false;
+            bossEncounter.active = false;
+            state.lastInteraction = "Victory recorded. The exit is open again.";
+            state.bossStatus.clear();
+            gameSession.resumeGameplay();
+        }
+
         if (isJustPressed(keyStateManager, state.previousKeys, 'p') ||
             isJustPressed(keyStateManager, state.previousKeys, 'P')) {
             player.restoreSavedStats(saveData.playerStats);
+            applyPersistentSkillsToPlayer(player, saveData);
             currentMapDefinition = mapLoader.loadMap(saveData.currentMapId);
             loadMapState(currentMapDefinition,
                          saveData.respawnMapId,
@@ -898,10 +1538,12 @@ int main() {
                          groundEnemies,
                          flyingEnemies,
                          enemyProjectiles);
+            initializeBossEncounter(currentMapDefinition, terrainMap, saveData, state, bossEncounter);
             state.lastInteraction = "Room reset to current save.";
         }
 
-        updatePrompt(currentMapDefinition, playerPosition, state);
+        updatePrompt(currentMapDefinition, saveData, playerPosition, state);
+        updateBossPrompt(state, bossEncounter);
 
         if (state.shopOpen && !state.shopOffers.empty()) {
             if (isJustPressed(keyStateManager, state.previousKeys, 'w') ||
@@ -946,9 +1588,34 @@ int main() {
                 } else {
                     const game::MapTransition* transition = findInteractableTransition(currentMapDefinition, playerPosition);
                     if (transition != 0) {
-                        currentMapDefinition = mapLoader.loadMap(transition->toMapId);
+                        if (isBossRoom01(currentMapDefinition) &&
+                            bossEncounter.active &&
+                            !bossEncounter.victoryActive) {
+                            state.lastInteraction = "A dark seal bars the exit until the boss falls.";
+                            state.previousKeys = keyStateManager.keyStates;
+                            std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
+                            continue;
+                        }
+
+                        const game::MapTransition transitionData = *transition;
+                        const std::string shortcutId = getShortcutDoorId(transitionData);
+                        const bool lockedFromVillage = isLockedVillageShortcut(saveData, transitionData);
+                        const bool unlockFromRemote = isRemoteUnlockShortcut(saveData, transitionData);
+
+                        if (lockedFromVillage) {
+                            state.lastInteraction = "This shortcut is locked from the village side.";
+                            state.previousKeys = keyStateManager.keyStates;
+                            std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
+                            continue;
+                        }
+
+                        if (unlockFromRemote && gameSession.unlockShortcut(shortcutId)) {
+                            saveData.unlockedShortcutIds = gameSession.getActiveSave().unlockedShortcutIds;
+                        }
+
+                        currentMapDefinition = mapLoader.loadMap(transitionData.toMapId);
                         loadMapState(currentMapDefinition,
-                                     transition->spawnPointId,
+                                     transitionData.spawnPointId,
                                      state,
                                      saveData,
                                      terrainMap,
@@ -956,21 +1623,30 @@ int main() {
                                      groundEnemies,
                                      flyingEnemies,
                                      enemyProjectiles);
+                        initializeBossEncounter(currentMapDefinition, terrainMap, saveData, state, bossEncounter);
                         syncSaveDataWithRuntime(player, state, gameSession, saveData);
                         gameSession.setActiveSave(saveData);
                         saveSystem.saveOnMapEntry(saveData);
-                        state.lastInteraction = "Entered " + currentMapDefinition.displayName + ".";
+                        state.lastInteraction = unlockFromRemote
+                                ? "Unlocked shortcut and entered " + currentMapDefinition.displayName + "."
+                                : "Entered " + currentMapDefinition.displayName + ".";
+                        state.previousKeys = keyStateManager.keyStates;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
+                        continue;
                     }
                 }
             }
         }
 
-        if (!state.shopOpen) {
+        const bool bossSequenceBlockingGameplay = bossEncounter.dialogueActive || bossEncounter.victoryActive;
+
+        if (!state.shopOpen && !bossSequenceBlockingGameplay) {
             std::string collisionMap = buildCollisionMap(terrainMap,
                                                          playerPosition,
                                                          currentMapDefinition,
                                                          groundEnemies,
-                                                         flyingEnemies);
+                                                         flyingEnemies,
+                                                         &bossEncounter);
             if (player.isAlive() && !player.isMovementLocked()) {
                 player.move(collisionMap);
                 const game::Position movedPlayerPosition = findGlyphPosition(collisionMap, '@');
@@ -985,21 +1661,34 @@ int main() {
 
         const int activeGroundEnemyIndex = findClosestGroundEnemyIndex(groundEnemies, playerPosition);
         const int activeFlyingEnemyIndex = findClosestFlyingEnemyIndex(flyingEnemies, playerPosition);
+        const game::CharacterStats statsBeforeCombat = player.getStats();
 
-        if (activeGroundEnemyIndex >= 0 && activeFlyingEnemyIndex >= 0) {
+        if (!bossSequenceBlockingGameplay && activeGroundEnemyIndex >= 0 && activeFlyingEnemyIndex >= 0) {
             player.updateCombat(gameplayMap,
                                 groundEnemies[static_cast<size_t>(activeGroundEnemyIndex)],
                                 flyingEnemies[static_cast<size_t>(activeFlyingEnemyIndex)]);
-        } else if (activeGroundEnemyIndex >= 0) {
+        } else if (!bossSequenceBlockingGameplay && activeGroundEnemyIndex >= 0) {
             player.updateCombat(gameplayMap,
                                 groundEnemies[static_cast<size_t>(activeGroundEnemyIndex)],
                                 dummyFlyingEnemy);
-        } else if (activeFlyingEnemyIndex >= 0) {
+        } else if (!bossSequenceBlockingGameplay && activeFlyingEnemyIndex >= 0) {
             player.updateCombat(gameplayMap,
                                 dummyGroundEnemy,
                                 flyingEnemies[static_cast<size_t>(activeFlyingEnemyIndex)]);
-        } else {
+        } else if (!bossSequenceBlockingGameplay) {
             player.updateCombat(gameplayMap, dummyGroundEnemy, dummyFlyingEnemy);
+        }
+
+        if (!bossSequenceBlockingGameplay) {
+            tryResolvePlayerHitOnBoss(playerPosition,
+                                      statsBeforeCombat,
+                                      player,
+                                      state,
+                                      saveData,
+                                      gameSession,
+                                      saveSystem,
+                                      keyStateManager,
+                                      bossEncounter);
         }
 
         for (size_t index = 0; index < groundEnemies.size(); ++index) {
@@ -1051,6 +1740,22 @@ int main() {
 
         updateEnemyProjectiles(terrainMap, playerPosition, enemyProjectiles, player);
         removeDefeatedEnemies(groundEnemies, flyingEnemies);
+        updateBossImpacts(bossEncounter);
+        if (bossEncounter.active && bossEncounter.battleActive && !bossEncounter.victoryActive) {
+            const game::Position previousBossPosition = bossEncounter.boss.getPosition();
+            bossEncounter.boss.updateAI(playerPosition, static_cast<float>(kFrameMs) / 1000.0f);
+            const game::Position nextBossPosition = bossEncounter.boss.getPosition();
+            if (bossEncounter.boss.isAlive() &&
+                (nextBossPosition.x != previousBossPosition.x || nextBossPosition.y != previousBossPosition.y) &&
+                !canBossOccupy(terrainMap, playerPosition, nextBossPosition)) {
+                bossEncounter.boss.setPosition(previousBossPosition);
+            }
+
+            game::BossAttackSignal signal;
+            if (bossEncounter.boss.consumeAttackSignal(signal)) {
+                resolveBossSignal(terrainMap, playerPosition, bossEncounter, signal, state, player);
+            }
+        }
         gameSession.update(static_cast<float>(kFrameMs) / 1000.0f);
         syncSaveDataWithRuntime(player, state, gameSession, saveData);
         gameSession.setActiveSave(saveData);
@@ -1058,13 +1763,29 @@ int main() {
         std::string renderMap = buildRenderMap(terrainMap,
                                                playerPosition,
                                                currentMapDefinition,
+                                               saveData,
                                                groundEnemies,
                                                flyingEnemies,
-                                               enemyProjectiles);
+                                               enemyProjectiles,
+                                               &bossEncounter);
         player.overlayRender(renderMap, gameplayMap);
+        if (bossEncounter.dialogueActive) {
+            std::vector<std::string> dialogueLines;
+            dialogueLines.push_back(bossEncounter.bossName);
+            dialogueLines.push_back(bossEncounter.dialogueLines[static_cast<size_t>(bossEncounter.dialogueIndex)]);
+            dialogueLines.push_back("ENTER");
+            overlayCenteredLines(renderMap, 4, dialogueLines);
+        } else if (bossEncounter.victoryActive) {
+            std::vector<std::string> victoryLines;
+            victoryLines.push_back("VICTORY");
+            victoryLines.push_back("Defeated " + bossEncounter.bossName);
+            victoryLines.push_back("Reward +" + std::to_string(bossEncounter.rewardHkd) + " HKD");
+            victoryLines.push_back("ENTER");
+            overlayCenteredLines(renderMap, 4, victoryLines);
+        }
         mapDrawer.currentmap = player.buildHud(currentMapDefinition.displayName) +
                                renderMap +
-                               buildBottomFooter(state);
+                               buildBottomFooter(state, saveData);
         mapDrawer.draw();
 
         if (player.consumeResetRequest()) {
@@ -1072,6 +1793,7 @@ int main() {
             saveData = saveSystem.restoreAfterDeath(gameSession.getActiveSave());
             gameSession.setActiveSave(saveData);
             player.restoreSavedStats(saveData.playerStats);
+            applyPersistentSkillsToPlayer(player, saveData);
             currentMapDefinition = mapLoader.loadMap(saveData.currentMapId);
             loadMapState(currentMapDefinition,
                          saveData.respawnMapId,
@@ -1082,6 +1804,7 @@ int main() {
                          groundEnemies,
                          flyingEnemies,
                          enemyProjectiles);
+            initializeBossEncounter(currentMapDefinition, terrainMap, saveData, state, bossEncounter);
             state.lastInteraction = "Respawned at current save point.";
         }
 

@@ -6,8 +6,8 @@ boss_room=false
 [spawn_points]
 player_start,8,14
 from_module_01,72,14
-from_module_03_shortcut,60,12
-from_module_05_shortcut,58,14
+from_module_03_shortcut,36,14
+from_module_05_shortcut,3,14
 
 [enemy_spawns]
 
@@ -18,7 +18,8 @@ merchant,45,8
 
 [transitions]
 spawn_village,module_01,from_spawn_village,74,14
-spawn_village,module_03,from_spawn_village_shortcut,68,12
+spawn_village,module_03,from_spawn_village_shortcut,37,14
+spawn_village,module_05,from_spawn_village_shortcut,2,14
 
 [terrain]
 ============================================================================

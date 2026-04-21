@@ -31,11 +31,18 @@
 | player | 跳跃保护 | min_jump_rise_time | 0.08 | 秒 | 即使松键也至少维持的上升时长 |
 | player | 提前松键 | early_release_vertical_speed | 0 | 速度 | 最短上升保护结束后松键，纵向速度立即归零 |
 | player | 顶头判定 | ceiling_hit_vertical_speed | 0 | 速度 | 整个跳跃过程中撞到天花板时，纵向速度立即归零 |
+| player | 二段跳 | double_jump_upward_speed | 15.85 | 速度 | 二段跳触发时的初始上升速度，略低于首跳 |
+| player | 二段跳 | extra_air_jumps | 1 | 次 | 当前最小方案仅提供 1 次额外空中跳跃 |
+| player | 冲刺 | dash_speed | 34.0 | 速度 | 普通横向 dash 的水平爆发速度 |
+| player | 冲刺 | dash_duration | 0.128 | 秒 | 普通横向 dash 的持续时间（8 帧） |
+| player | 冲刺 | dash_ground_cooldown | 0.288 | 秒 | 落地后普通横向 dash 的最小再次触发间隔（18 帧） |
 
 ## 3. 附带规则（非数值）
 
 - 跳跃在最短上升时间结束后，若松开跳跃键则立即转入下落。
 - 跳跃过程中若头顶碰到天花板，则立即转入下落。
+- 当前二段跳为最小版：离地后最多再补 1 次空中跳跃。
+- 当前普通 dash 为横向位移爆发，不附带无敌、不穿敌、不穿墙。
 
 ## 4. 灵魂参数
 
@@ -61,13 +68,13 @@
 | npc_merchant | 商品 | merchant_vital_shell_max_purchases | 2 | 次 | 生命强化当前最多购买 2 次 |
 | npc_merchant | 商品 | merchant_nail_edge_cost | 55 | HKD | `Nail Edge` 价格，攻击等级 +1 |
 | npc_merchant | 商品 | merchant_nail_edge_max_purchases | 2 | 次 | 攻击强化当前最多购买 2 次 |
-| npc_merchant | 商品 | merchant_shadow_dash_token_cost | 90 | HKD | `Shadow Dash Token` 价格，影冲能力预留 |
+| npc_merchant | 商品 | merchant_double_jump_crest_cost | 90 | HKD | `Double Jump Crest` 价格，购买后解锁二段跳 |
 
 ## 5.2 NPC / 商店附带规则
 
 - 医生交互后直接把当前生命补到上限，不做额外前摇。
 - 商店当前先做最小闭环：返回商品列表、购买结果和 HKD 扣费。
-- `Shadow Dash Token` 当前只返回“已授予影冲解锁标记”的结果，真正技能解锁与存档持久化仍需主流程接线。
+- `Double Jump Crest` 当前已正式接入主流程：购买后立即解锁二段跳，并随存档持久化。
 
 ## 6. 凝聚回血参数
 
@@ -172,13 +179,13 @@
 | boss_common | 受击反馈 | boss_hit_flash_duration | 0.12 | 秒 | Boss 受伤时短闪 `*` |
 | boss_common | 死亡反馈 | boss_death_flash_duration | 0.10 | 秒 | Boss 死亡第一阶段显示 `*` |
 | boss_common | 死亡反馈 | boss_death_marker_duration | 0.12 | 秒 | Boss 死亡第二阶段显示 `x` |
-| boss_melee | 血量 | boss_melee_health_current | 18 | 血量 | 当前近战 Boss 沙盒原型血量，后续可再调 |
+| boss_melee | 血量 | boss_melee_health_current | 355 | 血量 | 当前近战 Boss 原型血量 |
 | boss_melee | 硬直阈值 | boss_melee_stagger_threshold | 7 | 伤害 | 5 秒内累计达到该值时进入硬直 |
 | boss_melee | 前摇 | boss_melee_attack_startup | 0.45 | 秒 | 近战 Boss 常规攻击前摇 |
 | boss_melee | 恢复 | boss_melee_attack_recovery | 0.70 | 秒 | 近战 Boss 攻击后的恢复期 |
 | boss_melee | 硬直 | boss_melee_stagger_duration | 1.10 | 秒 | 当前近战 Boss 原型硬直时长 |
 | boss_melee | 奖励 | boss_melee_hkd_reward | 60 | HKD | 击杀近战 Boss 原型的奖励 |
-| boss_ranged | 血量 | boss_ranged_health_current | 14 | 血量 | 当前远程 Boss 沙盒原型血量，后续可再调 |
+| boss_ranged | 血量 | boss_ranged_health_current | 300 | 血量 | 当前飞行/远程 Boss 原型血量 |
 | boss_ranged | 硬直阈值 | boss_ranged_stagger_threshold | 6 | 伤害 | 5 秒内累计达到该值时进入硬直 |
 | boss_ranged | 前摇 | boss_ranged_attack_startup | 0.40 | 秒 | 远程 Boss 常规施法前摇 |
 | boss_ranged | 恢复 | boss_ranged_attack_recovery | 0.75 | 秒 | 远程 Boss 攻击后的恢复期 |
@@ -190,6 +197,33 @@
 ## 17. Boss 原型附带规则（当前仅用于 BossSandbox）
 
 - 当前 Boss 只先搭框架和测试沙盒，不代表最终 Boss 设计数值已经锁定。
-- 近战 Boss 原型当前包含：苏醒、贴近、横扫、冲刺斩、受击、硬直、死亡。
+- 近战 Boss 原型当前包含：苏醒、贴近、横扫、冲刺斩、跳跃重锤、受击、硬直、死亡。
 - 远程 Boss 原型当前包含：苏醒、拉扯、火球散射、陨石点名、受击、硬直、死亡。
-- `BossSandbox` 当前按 `1/2` 刷两种 Boss，`H/J` 用轻击/重击直接验证伤害、奖励和硬直结算。
+- `BossSandbox` 当前按 `1/2` 刷两种 Boss：近战 Boss 为 355 血，飞行/远程 Boss 为 300 血，且每次命中固定只扣 1 点血；`H/J` 仍可直接验证受击、奖励和硬直结算。
+- 当前近战 Boss 视觉包装已切到固定画布的盔甲锤风格：本体以 `# ] o x` 为核心，横扫改为蓄力锤 + 地面冲击波，冲刺改为前压重撞，JumpSlash 改为跳跃重锤，硬直改为破甲露核。
+- 当前远程 Boss 视觉包装已切到浮空法杖祭司：本体以 `o / \ | ~` 为核心，常态做小幅悬停波动，近身时用短法杖横扫击退，中距离主打三连扇形火球，重招改为带 `^` 预警的陨石落点，硬直时表现为翼塌核亮，死亡时表现为法核碎裂成 `*`。
+
+## 18. Boss 视觉 / 分镜规则（当前 demo 标准）
+
+| 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| boss_visual | 前摇 | boss_attack_startup_min | 0.35 | 秒 | 所有 Boss 大招前摇不得与伤害同帧 |
+| boss_visual | 前摇 | boss_attack_startup_max | 0.60 | 秒 | 保持可读，不做瞬发重击 |
+| boss_visual | 命中帧 | boss_attack_active_min | 0.08 | 秒 | 命中阶段最短建议时长 |
+| boss_visual | 命中帧 | boss_attack_active_max | 0.16 | 秒 | 命中阶段最长建议时长 |
+| boss_visual | 收招 | boss_attack_recovery_min | 0.12 | 秒 | 余波尽量短，避免长时间霸屏 |
+| boss_visual | 收招 | boss_attack_recovery_max | 0.25 | 秒 | 仅保留少量残影或粒子 |
+
+## 19. Boss 视觉语言附带规则（当前 demo 标准）
+
+- `!` 统一表示危险核心 / 刀压 / 落点中心。
+- `=` 统一表示横向冲刺轨迹 / 高速斩击路径。
+- `/` `\` 统一表示弧形挥砍 / 刀锋展开。
+- `^` 统一表示地面预警 / 即将从上方落下。
+- `*` 统一表示命中爆点 / 法术核心。
+- `.` `'` 统一表示残影 / 余波 / 能量尘。
+- `#` 统一表示重型蓄力感 / 黑影凝结。
+- `<` `>` 统一表示朝向和攻击方向提示。
+- `~` 统一表示浮空波动 / 法力扰动 / 狂怒法涌。
+- `o` 在飞行 Boss 上统一表示小头部 / 核心眼。
+- `|` 在飞行 Boss 上统一表示法杖 / 纵向躯干。
