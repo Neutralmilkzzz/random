@@ -1,0 +1,28 @@
+id=combat_room_01
+display_name=Combat Room 01
+type=CombatRoom
+boss_room=false
+
+[spawn_points]
+combat_entry,3,8
+
+[enemy_spawns]
+ground_enemy_basic,28,8
+ground_enemy_basic,44,8
+
+[npc_placements]
+
+[transitions]
+combat_room_01,boss_room_melee,boss_gate
+
+[terrain]
+============================================================================
+=                                                                          =
+=                                                                          =
+=                   ======                                                 =
+=                                                                          =
+=                                                  ======                  =
+=                                                                          =
+=                                                                          =
+=  @                                                                       =
+============================================================================

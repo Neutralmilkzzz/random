@@ -147,6 +147,7 @@ struct MapTransition {
     std::string fromMapId;
     std::string toMapId;
     std::string spawnPointId;
+    Position triggerPosition;
 };
 
 } // namespace game

@@ -18,8 +18,11 @@ namespace {
 
 const int kFrameMs = 16;
 const int kPlayerInvulnerabilityFrames = 45;
-const int kFlyingMoveCooldownFrames = 4;
-const int kFlyingAttackCooldownFrames = 55;
+const int kFlyingMoveCooldownFrames = 8;
+const int kFlyingAttackCooldownFrames = 70;
+const int kFlyingAttackStartupFrames = 18;
+const int kFlyingProjectileStepFrames = 3;
+const int kFlyingAggroRange = 12;
 const int kMaxEnemies = 16;
 
 const std::string kArenaTemplate =
@@ -46,6 +49,17 @@ struct SandboxEnemy {
     game::Position position;
     int moveCooldown;
     int attackCooldown;
+    int attackStartupFrames;
+    int hoverDirection;
+    game::Position anchorPosition;
+};
+
+struct EnemyProjectile {
+    game::Position position;
+    int dx;
+    int dy;
+    int stepCooldown;
+    int remainingFrames;
 };
 
 struct SandboxState {
@@ -60,6 +74,7 @@ struct SandboxState {
     int totalSpawned;
     int nextEnemyId;
     std::string lastEvent;
+    std::vector<EnemyProjectile> enemyProjectiles;
     std::unordered_map<int, bool> previousKeys;
 
     SandboxState()
@@ -213,9 +228,13 @@ std::string buildRenderMap(const std::string& terrainMap,
         const game::Position enemyPosition = enemies[index].type == SandboxEnemyType::Ground
                                                  ? enemies[index].groundEnemy.getPosition()
                                                  : enemies[index].position;
-        placeGlyph(renderMap,
-                   enemyPosition,
-                   enemies[index].type == SandboxEnemyType::Ground ? 'g' : 'f');
+        if (enemies[index].type == SandboxEnemyType::Ground) {
+            if (enemies[index].groundEnemy.isRenderable()) {
+                placeGlyph(renderMap, enemyPosition, enemies[index].groundEnemy.getRenderGlyph());
+            }
+        } else {
+            placeGlyph(renderMap, enemyPosition, 'f');
+        }
 
         if (enemies[index].type == SandboxEnemyType::Ground &&
             enemies[index].groundEnemy.getState() == game::GroundEnemyState::AttackStartup) {
@@ -223,7 +242,17 @@ std::string buildRenderMap(const std::string& terrainMap,
             placeGlyph(renderMap, game::Position(warningRow.x - 1, warningRow.y), '!');
             placeGlyph(renderMap, warningRow, '!');
             placeGlyph(renderMap, game::Position(warningRow.x + 1, warningRow.y), '!');
+        } else if (enemies[index].type == SandboxEnemyType::Flying &&
+                   enemies[index].attackStartupFrames > 0) {
+            const game::Position warningRow(enemyPosition.x, enemyPosition.y - 1);
+            placeGlyph(renderMap, game::Position(warningRow.x - 1, warningRow.y), '!');
+            placeGlyph(renderMap, warningRow, '!');
+            placeGlyph(renderMap, game::Position(warningRow.x + 1, warningRow.y), '!');
         }
+    }
+
+    for (size_t index = 0; index < state.enemyProjectiles.size(); ++index) {
+        placeGlyph(renderMap, state.enemyProjectiles[index].position, '*');
     }
 
     if (!state.playerBlinking || ((state.invulnerabilityFramesRemaining / 4) % 2 == 0)) {
@@ -256,7 +285,8 @@ std::string buildHud(const SandboxState& state, const std::vector<SandboxEnemy>&
         << " | Flying " << flyingCount << "\n";
     hud << "Spawned Total " << state.totalSpawned
         << " | Ground Spawns " << state.groundSpawns
-        << " | Flying Spawns " << state.flyingSpawns << "\n";
+        << " | Flying Spawns " << state.flyingSpawns
+        << " | Enemy Shots " << state.enemyProjectiles.size() << "\n";
     hud << "Last Event: " << state.lastEvent << "\n\n";
     return hud.str();
 }
@@ -279,6 +309,7 @@ void resetSandbox(std::string& terrainMap,
     state.flyingSpawns = 0;
     state.totalSpawned = 0;
     state.nextEnemyId = 1;
+    state.enemyProjectiles.clear();
     state.lastEvent = "Sandbox reset.";
 }
 
@@ -303,7 +334,10 @@ bool spawnEnemy(std::vector<SandboxEnemy>& enemies,
     enemy.type = type;
     enemy.attackCooldown = 0;
     enemy.moveCooldown = 0;
+    enemy.attackStartupFrames = 0;
+    enemy.hoverDirection = 1;
     enemy.position = spawnPosition;
+    enemy.anchorPosition = spawnPosition;
 
     if (type == SandboxEnemyType::Ground) {
         enemy.groundEnemy = game::GroundEnemy("ground_enemy_" + std::to_string(enemy.id), spawnPosition);
@@ -372,6 +406,73 @@ void damagePlayer(SandboxState& state, const std::string& sourceLabel) {
     }
 }
 
+void spawnFlyingProjectile(SandboxEnemy& enemy,
+                           const game::Position& playerPosition,
+                           SandboxState& state) {
+    EnemyProjectile projectile;
+    projectile.position = enemy.position;
+    if (playerPosition.x > enemy.position.x) {
+        projectile.dx = 1;
+    } else if (playerPosition.x < enemy.position.x) {
+        projectile.dx = -1;
+    } else {
+        projectile.dx = 0;
+    }
+
+    if (playerPosition.y < enemy.position.y - 1) {
+        projectile.dy = -1;
+    } else if (playerPosition.y > enemy.position.y + 1) {
+        projectile.dy = 1;
+    } else {
+        projectile.dy = 0;
+    }
+
+    projectile.stepCooldown = kFlyingProjectileStepFrames;
+    projectile.remainingFrames = 45;
+    state.enemyProjectiles.push_back(projectile);
+}
+
+void updateEnemyProjectiles(const std::string& terrainMap,
+                            const game::Position& playerPosition,
+                            SandboxState& state) {
+    std::vector<EnemyProjectile> nextProjectiles;
+    nextProjectiles.reserve(state.enemyProjectiles.size());
+
+    for (size_t index = 0; index < state.enemyProjectiles.size(); ++index) {
+        EnemyProjectile projectile = state.enemyProjectiles[index];
+
+        if (projectile.remainingFrames <= 0) {
+            continue;
+        }
+
+        projectile.remainingFrames--;
+
+        if (projectile.stepCooldown > 0) {
+            projectile.stepCooldown--;
+            nextProjectiles.push_back(projectile);
+            continue;
+        }
+
+        projectile.stepCooldown = kFlyingProjectileStepFrames;
+        projectile.position.x += projectile.dx;
+        projectile.position.y += projectile.dy;
+
+        if (!isInsidePlayableArea(terrainMap, projectile.position) ||
+            tileAt(terrainMap, projectile.position) != ' ') {
+            continue;
+        }
+
+        if (projectile.position.x == playerPosition.x && projectile.position.y == playerPosition.y) {
+            damagePlayer(state, "Flying fireball");
+            continue;
+        }
+
+        nextProjectiles.push_back(projectile);
+    }
+
+    state.enemyProjectiles.swap(nextProjectiles);
+}
+
 void updateGroundEnemy(SandboxEnemy& enemy,
                        const std::string& terrainMap,
                        const std::vector<SandboxEnemy>& enemies,
@@ -405,13 +506,29 @@ void updateFlyingEnemy(SandboxEnemy& enemy,
     if (enemy.moveCooldown > 0) {
         enemy.moveCooldown--;
     }
+    if (enemy.attackStartupFrames > 0) {
+        enemy.attackStartupFrames--;
+    }
 
     const int deltaX = playerPosition.x - enemy.position.x;
     const int deltaY = playerPosition.y - enemy.position.y;
 
-    if (std::abs(deltaX) <= 2 && std::abs(deltaY) <= 1 && enemy.attackCooldown == 0) {
+    if (enemy.attackStartupFrames == 1) {
+        spawnFlyingProjectile(enemy, playerPosition, state);
         enemy.attackCooldown = kFlyingAttackCooldownFrames;
-        damagePlayer(state, "Flying enemy");
+        state.lastEvent = "Flying enemy launched a fireball.";
+        return;
+    }
+
+    if (enemy.attackStartupFrames > 0) {
+        return;
+    }
+
+    if (std::abs(deltaX) <= kFlyingAggroRange &&
+        std::abs(deltaY) <= 4 &&
+        enemy.attackCooldown == 0) {
+        enemy.attackStartupFrames = kFlyingAttackStartupFrames;
+        state.lastEvent = "Flying enemy is charging a fireball.";
         return;
     }
 
@@ -420,11 +537,21 @@ void updateFlyingEnemy(SandboxEnemy& enemy,
     }
 
     game::Position next = enemy.position;
-    if (deltaX != 0) {
-        next.x += deltaX > 0 ? 1 : -1;
-    }
-    if (deltaY != 0 && std::abs(deltaY) > 1) {
-        next.y += deltaY > 0 ? 1 : -1;
+    if (std::abs(deltaX) <= kFlyingAggroRange) {
+        if (deltaX != 0) {
+            next.x += deltaX > 0 ? 1 : -1;
+        }
+        if (std::abs(deltaY) > 2) {
+            next.y += deltaY > 0 ? 1 : -1;
+        }
+    } else {
+        const int verticalOffset = enemy.position.y - enemy.anchorPosition.y;
+        if (verticalOffset >= 2) {
+            enemy.hoverDirection = -1;
+        } else if (verticalOffset <= -2) {
+            enemy.hoverDirection = 1;
+        }
+        next.y += enemy.hoverDirection;
     }
 
     if (canEnemyOccupy(terrainMap, enemies, playerPosition, next, enemy.id)) {
@@ -433,9 +560,16 @@ void updateFlyingEnemy(SandboxEnemy& enemy,
         return;
     }
 
-    game::Position horizontal(enemy.position.x + (deltaX > 0 ? 1 : -1), enemy.position.y);
+    game::Position horizontal(enemy.position.x + (deltaX == 0 ? 0 : (deltaX > 0 ? 1 : -1)), enemy.position.y);
     if (deltaX != 0 && canEnemyOccupy(terrainMap, enemies, playerPosition, horizontal, enemy.id)) {
         enemy.position = horizontal;
+        enemy.moveCooldown = kFlyingMoveCooldownFrames;
+        return;
+    }
+
+    const game::Position vertical(enemy.position.x, enemy.position.y + enemy.hoverDirection);
+    if (canEnemyOccupy(terrainMap, enemies, playerPosition, vertical, enemy.id)) {
+        enemy.position = vertical;
         enemy.moveCooldown = kFlyingMoveCooldownFrames;
     }
 }
@@ -491,6 +625,7 @@ int main() {
 
         if (isJustPressed(keyStateManager, state, 'c') || isJustPressed(keyStateManager, state, 'C')) {
             enemies.clear();
+            state.enemyProjectiles.clear();
             state.lastEvent = "Cleared all active enemies.";
         }
 
@@ -526,6 +661,7 @@ int main() {
 
         if (!state.freezeAi && state.stats.health.current > 0) {
             updateEnemies(enemies, terrainMap, playerPosition, state);
+            updateEnemyProjectiles(terrainMap, playerPosition, state);
         }
 
         mapDrawer.currentmap = buildHud(state, enemies) + buildRenderMap(terrainMap, playerPosition, enemies, state);

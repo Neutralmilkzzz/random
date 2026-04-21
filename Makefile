@@ -27,6 +27,7 @@ RUNTIME_SRCS = src/player/Player.cpp \
 
 # 源文件
 SRCS = src/core/main.cpp \
+       src/enemy/Enemy.cpp \
        $(RUNTIME_SRCS)
 
 # 头文件
@@ -57,8 +58,8 @@ sandboxes: $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TAR
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
-$(PLAYER_SANDBOX_TARGET): src/sandbox/PlayerSandbox.cpp $(RUNTIME_SRCS) $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/PlayerSandbox.cpp $(RUNTIME_SRCS) $(LDFLAGS)
+$(PLAYER_SANDBOX_TARGET): src/sandbox/PlayerSandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/PlayerSandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
 
 $(SKILL_SANDBOX_TARGET): src/sandbox/SkillSandbox.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/SkillSandbox.cpp $(LDFLAGS)
@@ -69,8 +70,8 @@ $(COMBAT_SANDBOX_TARGET): src/sandbox/CombatSandbox.cpp $(HEADERS)
 $(ENEMY_SANDBOX_TARGET): src/sandbox/EnemySandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/EnemySandbox.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
 
-$(WORLD_SANDBOX_TARGET): src/sandbox/WorldSandbox.cpp $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/WorldSandbox.cpp $(LDFLAGS)
+$(WORLD_SANDBOX_TARGET): src/sandbox/WorldSandbox.cpp src/world/WorldSystem.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/WorldSandbox.cpp src/world/WorldSystem.cpp $(LDFLAGS)
 
 # 编译源文件
 %.o: %.cpp $(HEADERS)

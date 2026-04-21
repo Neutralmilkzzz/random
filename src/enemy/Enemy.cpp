@@ -19,11 +19,19 @@ GroundEnemy::GroundEnemy(const std::string& enemyId, const Position& initialSpaw
       loseAggroRange(16.0f),
       alertRange(7.0f),
       attackRange(2.0f),
+      patrolRange(3.0f),
       moveStepSeconds(0.12f),
       attackStartupSeconds(0.35f),
       dashStepSeconds(0.035f),
       attackRecoverySeconds(1.0f),
+      idlePauseRemaining(0.0f),
+      idlePauseSeconds(0.20f),
+      hitFlashSeconds(0.12f),
+      deathFlashSeconds(0.07f),
+      deathMarkerSeconds(0.07f),
+      deathAnimationRemaining(0.0f),
       dashStepsRemaining(0),
+      patrolDirection(1),
       dashAccumulator(0.0f) {
     stats.health.current = 3;
     stats.health.maximum = 3;
@@ -60,17 +68,23 @@ void GroundEnemy::takeDamage(const DamageInfo& damageInfo) {
 
     stats.health.current -= damageInfo.amount;
     hitFeedback.blinking = true;
-    hitFeedback.blinkDurationSeconds = 0.20f;
-    hitFeedback.invulnerabilitySeconds = 0.20f;
+    hitFeedback.blinkDurationSeconds = hitFlashSeconds;
+    hitFeedback.invulnerabilitySeconds = hitFlashSeconds;
 
     if (stats.health.current <= 0) {
         stats.health.current = 0;
         alive = false;
         state = GroundEnemyState::Dead;
+        hitFeedback.blinking = false;
+        hitFeedback.blinkDurationSeconds = 0.0f;
+        hitFeedback.invulnerabilitySeconds = 0.0f;
         attackTriggerQueued = false;
         attackStartupRemaining = 0.0f;
         attackRecoveryRemaining = 0.0f;
+        idlePauseRemaining = 0.0f;
+        deathAnimationRemaining = deathFlashSeconds + deathMarkerSeconds;
         dashStepsRemaining = 0;
+        patrolDirection = 1;
         dashAccumulator = 0.0f;
     }
 }
@@ -162,12 +176,37 @@ void GroundEnemy::updateAI(const Position& playerPosition, float deltaSeconds) {
 
     if (state == GroundEnemyState::Idle && absX <= aggroRange && absY <= 1.0f) {
         state = GroundEnemyState::Chase;
+        idlePauseRemaining = 0.0f;
+        return;
+    }
+
+    if (state == GroundEnemyState::Idle) {
+        position.y = spawnPosition.y;
+
+        if (idlePauseRemaining > 0.0f) {
+            idlePauseRemaining -= deltaSeconds;
+            if (idlePauseRemaining < 0.0f) {
+                idlePauseRemaining = 0.0f;
+            }
+            return;
+        }
+
+        const int patrolTargetX = spawnPosition.x + static_cast<int>(patrolRange) * patrolDirection;
+        moveTowardX(patrolTargetX, deltaSeconds);
+
+        if ((patrolDirection > 0 && position.x >= patrolTargetX) ||
+            (patrolDirection < 0 && position.x <= patrolTargetX)) {
+            patrolDirection *= -1;
+            idlePauseRemaining = idlePauseSeconds;
+        }
+        return;
     }
 
     if (state == GroundEnemyState::ReturnToPost) {
         if (position.x == spawnPosition.x && position.y == spawnPosition.y) {
             state = GroundEnemyState::Idle;
             moveAccumulator = 0.0f;
+            idlePauseRemaining = idlePauseSeconds;
             return;
         }
 
@@ -176,6 +215,7 @@ void GroundEnemy::updateAI(const Position& playerPosition, float deltaSeconds) {
 
         if (position.x == spawnPosition.x && position.y == spawnPosition.y) {
             state = GroundEnemyState::Idle;
+            idlePauseRemaining = idlePauseSeconds;
         }
         return;
     }
@@ -252,6 +292,32 @@ bool GroundEnemy::consumeAttackTrigger() {
     return true;
 }
 
+bool GroundEnemy::isRenderable() const {
+    return alive || deathAnimationRemaining > 0.0f;
+}
+
+bool GroundEnemy::shouldDespawn() const {
+    return !alive && deathAnimationRemaining <= 0.0f;
+}
+
+char GroundEnemy::getRenderGlyph() const {
+    if (!alive) {
+        if (deathAnimationRemaining > deathMarkerSeconds) {
+            return '*';
+        }
+        if (deathAnimationRemaining > 0.0f) {
+            return 'x';
+        }
+        return ' ';
+    }
+
+    if (hitFeedback.blinking) {
+        return '*';
+    }
+
+    return 'g';
+}
+
 void GroundEnemy::updateHitFeedback(float deltaSeconds) {
     if (hitFeedback.blinkDurationSeconds > 0.0f) {
         hitFeedback.blinkDurationSeconds -= deltaSeconds;
@@ -265,6 +331,13 @@ void GroundEnemy::updateHitFeedback(float deltaSeconds) {
         hitFeedback.invulnerabilitySeconds -= deltaSeconds;
         if (hitFeedback.invulnerabilitySeconds < 0.0f) {
             hitFeedback.invulnerabilitySeconds = 0.0f;
+        }
+    }
+
+    if (deathAnimationRemaining > 0.0f) {
+        deathAnimationRemaining -= deltaSeconds;
+        if (deathAnimationRemaining < 0.0f) {
+            deathAnimationRemaining = 0.0f;
         }
     }
 }

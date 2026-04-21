@@ -31,6 +31,7 @@ struct MapDefinition {
     std::vector<EnemySpawn> enemySpawns;
     std::vector<NpcPlacement> npcPlacements;
     std::vector<MapTransition> transitions;
+    std::vector<std::string> terrainRows;
     bool isBossRoom = false;
 };
 

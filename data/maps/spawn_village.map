@@ -1,0 +1,28 @@
+id=spawn_village
+display_name=Spawn Village
+type=SpawnVillage
+boss_room=false
+
+[spawn_points]
+village_entry,3,8
+
+[enemy_spawns]
+
+[npc_placements]
+village_elder,16,8
+doctor,26,8
+
+[transitions]
+spawn_village,village_house_interior,house_entry,55,8
+
+[terrain]
+============================================================================
+=                                                                          =
+=                                                                          =
+=                                                                          =
+=                        ========                                          =
+=                                                                          =
+=                                                                          =
+=                                                                          =
+=  @                                                                       =
+============================================================================

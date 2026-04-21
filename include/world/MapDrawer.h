@@ -14,6 +14,9 @@ public:
     std::vector<int> testmap1iniplace;
     std::vector<int> testmap2iniplace;
     bool consolePrepared;
+    bool useAnsiCursorControl;
+    size_t lastFrameWidth;
+    size_t lastFrameHeight;
 
 public:
     MapDrawer();

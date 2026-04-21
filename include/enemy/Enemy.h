@@ -61,6 +61,9 @@ public:
     bool isTouchingPlayer(const Position& playerPosition) const;
     bool isInAttackRange(const Position& playerPosition) const;
     bool consumeAttackTrigger();
+    bool isRenderable() const;
+    bool shouldDespawn() const;
+    char getRenderGlyph() const;
 
 private:
     void updateHitFeedback(float deltaSeconds);
@@ -84,11 +87,19 @@ private:
     float loseAggroRange;
     float alertRange;
     float attackRange;
+    float patrolRange;
     float moveStepSeconds;
     float attackStartupSeconds;
     float dashStepSeconds;
     float attackRecoverySeconds;
+    float idlePauseRemaining;
+    float idlePauseSeconds;
+    float hitFlashSeconds;
+    float deathFlashSeconds;
+    float deathMarkerSeconds;
+    float deathAnimationRemaining;
     int dashStepsRemaining;
+    int patrolDirection;
     float dashAccumulator;
 };
 

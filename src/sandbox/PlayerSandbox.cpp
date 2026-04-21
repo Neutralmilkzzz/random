@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "enemy/Enemy.h"
 #include "input/KeyStateManager.h"
 #include "player/Player.h"
 #include "shared/GameTypes.h"
@@ -20,6 +21,16 @@ const int kBlinkFrames = 125;
 const int kHealLockoutFrames = 188;
 const int kAttackRange = 2;
 const int kHealCastFrames = 42;
+const int kUpWaveCastFrames = 18;
+const int kDownSlamCastFrames = 16;
+const int kMeleeVisualFrames = 6;
+const int kDeathFreezeFrames = 6;
+const int kDeathDotFrames = 4;
+const int kDeathExpandFrames = 24;
+const int kDeathFullWhiteFrames = 10;
+const int kDeathTextFrames = 60;
+const int kSoulMeterMax = 99;
+const int kPlayerAttackDamage = 1;
 
 const std::string kArenaMap =
         "============================================================================\n"
@@ -34,12 +45,19 @@ const std::string kArenaMap =
         "=   @                                                                      =\n"
         "============================================================================";
 
+const std::vector<game::Position> kGroundEnemySpawnPoints = {
+        game::Position(18, 9),
+        game::Position(26, 9),
+        game::Position(34, 9),
+        game::Position(42, 9)
+};
+
 struct VisualProjectile {
     game::Position position;
     int dx;
     int dy;
     int remainingFrames;
-    char glyph;
+    int totalFrames;
     std::string label;
 };
 
@@ -47,6 +65,18 @@ struct VisualEffect {
     std::vector<game::Position> cells;
     int remainingFrames;
     char glyph;
+};
+
+struct SpellVisualCell {
+    int dx;
+    int dy;
+    char glyph;
+};
+
+enum class MeleeVisualType {
+    Horizontal,
+    Up,
+    Down
 };
 
 struct HealCastState {
@@ -61,6 +91,80 @@ struct HealCastState {
     }
 };
 
+struct UpWaveCastState {
+    bool active;
+    bool damageResolved;
+    int elapsedFrames;
+    int totalFrames;
+    game::Position origin;
+
+    UpWaveCastState()
+        : active(false),
+          damageResolved(false),
+          elapsedFrames(0),
+          totalFrames(kUpWaveCastFrames),
+          origin(-1, -1) {
+    }
+};
+
+struct DownSlamCastState {
+    bool active;
+    bool damageResolved;
+    int elapsedFrames;
+    int totalFrames;
+    game::Position origin;
+    game::Position impact;
+
+    DownSlamCastState()
+        : active(false),
+          damageResolved(false),
+          elapsedFrames(0),
+          totalFrames(kDownSlamCastFrames),
+          origin(-1, -1),
+          impact(-1, -1) {
+    }
+};
+
+struct MeleeVisualState {
+    bool active;
+    int elapsedFrames;
+    int totalFrames;
+    MeleeVisualType type;
+    game::Position origin;
+    game::FacingDirection facing;
+
+    MeleeVisualState()
+        : active(false),
+          elapsedFrames(0),
+          totalFrames(kMeleeVisualFrames),
+          type(MeleeVisualType::Horizontal),
+          origin(-1, -1),
+          facing(game::FacingDirection::Right) {
+    }
+};
+
+struct DeathAnimationState {
+    bool active;
+    int elapsedFrames;
+    game::Position center;
+
+    DeathAnimationState()
+        : active(false),
+          elapsedFrames(0),
+          center(-1, -1) {
+    }
+};
+
+struct SandboxEnemy {
+    int id;
+    game::GroundEnemy groundEnemy;
+
+    SandboxEnemy(int enemyId, const game::Position& spawnPosition)
+        : id(enemyId),
+          groundEnemy("player_sandbox_ground_enemy_" + std::to_string(enemyId), spawnPosition) {
+    }
+};
+
 struct SandboxState {
     game::CharacterStats stats;
     game::HitFeedbackState hitFeedback;
@@ -71,9 +175,16 @@ struct SandboxState {
     int selfDamageCount;
     int successfulHealCount;
     int failedHealCount;
+    int groundEnemySpawns;
+    int defeatedGroundEnemies;
+    int nextEnemyId;
     int framesSinceLastDamage;
     int blinkFramesRemaining;
     HealCastState healCast;
+    UpWaveCastState upWaveCast;
+    DownSlamCastState downSlamCast;
+    MeleeVisualState meleeVisual;
+    DeathAnimationState deathAnimation;
     std::string lastAction;
     std::string lastResult;
     std::vector<VisualProjectile> projectiles;
@@ -88,10 +199,15 @@ struct SandboxState {
           selfDamageCount(0),
           successfulHealCount(0),
           failedHealCount(0),
+          groundEnemySpawns(0),
+          defeatedGroundEnemies(0),
+          nextEnemyId(1),
           framesSinceLastDamage(kHealLockoutFrames),
           blinkFramesRemaining(0),
           lastAction("Ready"),
-          lastResult("A/D move, SPACE jump, ESC exit.") {
+          lastResult("A/D move, SPACE jump, 1/2 spawn ground enemies, ESC exit.") {
+        stats.soul.maximum = kSoulMeterMax;
+        stats.soul.current = stats.soul.maximum;
     }
 };
 
@@ -115,6 +231,64 @@ float healProgress(const SandboxState& state) {
     }
 
     return static_cast<float>(state.healCast.elapsedFrames) / static_cast<float>(state.healCast.totalFrames);
+}
+
+int upWaveStage(const SandboxState& state) {
+    if (!state.upWaveCast.active || state.upWaveCast.totalFrames <= 0) {
+        return -1;
+    }
+
+    int stage = (state.upWaveCast.elapsedFrames * 6) / state.upWaveCast.totalFrames;
+    if (stage < 0) {
+        stage = 0;
+    }
+    if (stage > 5) {
+        stage = 5;
+    }
+    return stage;
+}
+
+int downSlamStage(const SandboxState& state) {
+    if (!state.downSlamCast.active || state.downSlamCast.totalFrames <= 0) {
+        return -1;
+    }
+
+    int stage = (state.downSlamCast.elapsedFrames * 4) / state.downSlamCast.totalFrames;
+    if (stage < 0) {
+        stage = 0;
+    }
+    if (stage > 3) {
+        stage = 3;
+    }
+    return stage;
+}
+
+int meleeVisualStage(const SandboxState& state) {
+    if (!state.meleeVisual.active || state.meleeVisual.totalFrames <= 0) {
+        return -1;
+    }
+
+    int stage = (state.meleeVisual.elapsedFrames * 2) / state.meleeVisual.totalFrames;
+    if (stage < 0) {
+        stage = 0;
+    }
+    if (stage > 1) {
+        stage = 1;
+    }
+    return stage;
+}
+
+int deathAnimationTotalFrames() {
+    return kDeathFreezeFrames +
+           kDeathDotFrames +
+           kDeathExpandFrames +
+           kDeathFullWhiteFrames +
+           kDeathTextFrames;
+}
+
+bool isDeathTextPhase(const SandboxState& state) {
+    return state.deathAnimation.elapsedFrames >=
+           (kDeathFreezeFrames + kDeathDotFrames + kDeathExpandFrames + kDeathFullWhiteFrames);
 }
 
 size_t lineWidth(const std::string& map) {
@@ -161,6 +335,338 @@ void placeGlyph(std::string& map, const game::Position& position, char glyph) {
     map[indexFromPosition(map, position)] = glyph;
 }
 
+std::vector<SpellVisualCell> buildUpWaveVisualCells(int stage) {
+    std::vector<SpellVisualCell> cells;
+
+    switch (stage) {
+    case 0:
+        cells.push_back({-1, -2, '.'});
+        cells.push_back({0, -2, '^'});
+        cells.push_back({1, -2, '.'});
+        cells.push_back({-1, -1, '/'});
+        cells.push_back({1, -1, '\\'});
+        break;
+    case 1:
+        cells.push_back({0, -3, '^'});
+        cells.push_back({-1, -2, '.'});
+        cells.push_back({0, -2, '*'});
+        cells.push_back({1, -2, '.'});
+        cells.push_back({0, -1, '!'});
+        break;
+    case 2:
+        cells.push_back({0, -4, '^'});
+        cells.push_back({-1, -3, '.'});
+        cells.push_back({0, -3, '!'});
+        cells.push_back({1, -3, '.'});
+        cells.push_back({0, -2, '!'});
+        cells.push_back({0, -1, '!'});
+        break;
+    case 3:
+        cells.push_back({-1, -4, '\\'});
+        cells.push_back({0, -4, '|'});
+        cells.push_back({1, -4, '/'});
+        cells.push_back({-2, -3, '<'});
+        cells.push_back({-1, -3, '-'});
+        cells.push_back({0, -3, '!'});
+        cells.push_back({1, -3, '-'});
+        cells.push_back({2, -3, '>'});
+        cells.push_back({-1, -2, '\\'});
+        cells.push_back({0, -2, '|'});
+        cells.push_back({1, -2, '/'});
+        cells.push_back({0, -1, '!'});
+        break;
+    case 4:
+        cells.push_back({-2, -5, '\\'});
+        cells.push_back({-1, -5, '^'});
+        cells.push_back({0, -5, '^'});
+        cells.push_back({1, -5, '^'});
+        cells.push_back({2, -5, '/'});
+        cells.push_back({-3, -4, '<'});
+        cells.push_back({-2, -4, '-'});
+        cells.push_back({-1, -4, '*'});
+        cells.push_back({0, -4, '*'});
+        cells.push_back({1, -4, '*'});
+        cells.push_back({2, -4, '-'});
+        cells.push_back({3, -4, '>'});
+        cells.push_back({-1, -3, '\\'});
+        cells.push_back({0, -3, '|'});
+        cells.push_back({1, -3, '/'});
+        cells.push_back({-1, -2, '\\'});
+        cells.push_back({0, -2, '|'});
+        cells.push_back({1, -2, '/'});
+        cells.push_back({0, -1, '!'});
+        break;
+    case 5:
+    default:
+        cells.push_back({-1, -4, '.'});
+        cells.push_back({0, -4, '^'});
+        cells.push_back({1, -4, '.'});
+        cells.push_back({-1, -3, '\\'});
+        cells.push_back({0, -3, '|'});
+        cells.push_back({1, -3, '/'});
+        cells.push_back({0, -2, '!'});
+        cells.push_back({0, -1, '.'});
+        break;
+    }
+
+    return cells;
+}
+
+std::vector<SpellVisualCell> buildHorizontalWaveVisualCells(const VisualProjectile& projectile) {
+    std::vector<SpellVisualCell> cells;
+    if (projectile.dx == 0) {
+        return cells;
+    }
+
+    const int age = projectile.totalFrames - projectile.remainingFrames;
+    const bool facingRight = projectile.dx > 0;
+
+    if (age <= 2) {
+        if (facingRight) {
+            cells.push_back({-2, 0, '-'});
+            cells.push_back({-1, 0, '='});
+            cells.push_back({0, 0, '>'});
+        } else {
+            cells.push_back({0, 0, '<'});
+            cells.push_back({1, 0, '='});
+            cells.push_back({2, 0, '-'});
+        }
+        return cells;
+    }
+
+    if (projectile.remainingFrames <= 4) {
+        if (facingRight) {
+            cells.push_back({-2, 0, '~'});
+            cells.push_back({-1, 0, '~'});
+            cells.push_back({0, 0, '>'});
+        } else {
+            cells.push_back({0, 0, '<'});
+            cells.push_back({1, 0, '~'});
+            cells.push_back({2, 0, '~'});
+        }
+        return cells;
+    }
+
+    if (facingRight) {
+        cells.push_back({-3, 0, '~'});
+        cells.push_back({-2, 0, '='});
+        cells.push_back({-1, 0, '='});
+        cells.push_back({0, 0, '>'});
+        cells.push_back({-2, -1, '.'});
+        cells.push_back({-2, 1, '\''});
+    } else {
+        cells.push_back({0, 0, '<'});
+        cells.push_back({1, 0, '='});
+        cells.push_back({2, 0, '='});
+        cells.push_back({3, 0, '~'});
+        cells.push_back({2, -1, '.'});
+        cells.push_back({2, 1, '\''});
+    }
+
+    return cells;
+}
+
+std::vector<game::Position> buildUpWaveDamageCells(const std::string& map,
+                                                   const game::Position& origin,
+                                                   bool includeCrown) {
+    std::vector<game::Position> cells;
+
+    for (int dy = -1; dy >= -5; --dy) {
+        const game::Position position(origin.x, origin.y + dy);
+        if (!isInsidePlayableArea(map, position) || tileAt(map, position) == '=') {
+            break;
+        }
+        cells.push_back(position);
+    }
+
+    if (includeCrown) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            const game::Position position(origin.x + dx, origin.y - 4);
+            if (!isInsidePlayableArea(map, position) || tileAt(map, position) == '=') {
+                continue;
+            }
+            cells.push_back(position);
+        }
+    }
+
+    return cells;
+}
+
+game::Position findDownSlamImpactPosition(const std::string& map, const game::Position& origin) {
+    game::Position impact = origin;
+
+    for (int y = origin.y + 1; y < 200; ++y) {
+        const game::Position candidate(origin.x, y);
+        if (!isInsidePlayableArea(map, candidate)) {
+            break;
+        }
+        if (tileAt(map, candidate) == '=') {
+            break;
+        }
+        impact = candidate;
+    }
+
+    return impact;
+}
+
+std::vector<SpellVisualCell> buildDownSlamVisualCells(const SandboxState& state) {
+    std::vector<SpellVisualCell> cells;
+    const int stage = downSlamStage(state);
+    const int descentLength = std::max(1, state.downSlamCast.impact.y - state.downSlamCast.origin.y);
+
+    switch (stage) {
+    case 0:
+        cells.push_back({0, 1, '.'});
+        cells.push_back({-1, 2, '\\'});
+        cells.push_back({0, 2, '|'});
+        cells.push_back({1, 2, '/'});
+        cells.push_back({0, 3, '!'});
+        break;
+    case 1:
+        for (int step = 1; step <= std::min(3, descentLength); ++step) {
+            cells.push_back({0, step, '!'});
+        }
+        break;
+    case 2: {
+        const int impactDy = state.downSlamCast.impact.y - state.downSlamCast.origin.y;
+        cells.push_back({0, std::max(1, impactDy - 1), '!'});
+        cells.push_back({-1, impactDy - 1, '\\'});
+        cells.push_back({0, impactDy - 1, '|'});
+        cells.push_back({1, impactDy - 1, '/'});
+        cells.push_back({-3, impactDy, '<'});
+        cells.push_back({-2, impactDy, '-'});
+        cells.push_back({-1, impactDy, '*'});
+        cells.push_back({0, impactDy, '*'});
+        cells.push_back({1, impactDy, '*'});
+        cells.push_back({2, impactDy, '-'});
+        cells.push_back({3, impactDy, '>'});
+        break;
+    }
+    case 3:
+    default: {
+        const int impactDy = state.downSlamCast.impact.y - state.downSlamCast.origin.y;
+        cells.push_back({0, std::max(1, impactDy - 1), '.'});
+        cells.push_back({-1, impactDy - 1, '\\'});
+        cells.push_back({0, impactDy - 1, '|'});
+        cells.push_back({1, impactDy - 1, '/'});
+        cells.push_back({0, impactDy, '.'});
+        break;
+    }
+    }
+
+    return cells;
+}
+
+std::vector<SpellVisualCell> buildMeleeVisualCells(const SandboxState& state) {
+    std::vector<SpellVisualCell> cells;
+    if (!state.meleeVisual.active) {
+        return cells;
+    }
+
+    const int stage = meleeVisualStage(state);
+    switch (state.meleeVisual.type) {
+    case MeleeVisualType::Horizontal:
+        if (state.meleeVisual.facing == game::FacingDirection::Right) {
+            cells.push_back({1, 0, stage == 0 ? '-' : '='});
+            cells.push_back({2, 0, '/'});
+        } else {
+            cells.push_back({-2, 0, '\\'});
+            cells.push_back({-1, 0, stage == 0 ? '-' : '='});
+        }
+        break;
+    case MeleeVisualType::Up:
+        if (stage == 0) {
+            cells.push_back({0, -1, '^'});
+        } else {
+            cells.push_back({0, -2, '^'});
+            cells.push_back({-1, -1, '/'});
+            cells.push_back({0, -1, '|'});
+            cells.push_back({1, -1, '\\'});
+        }
+        break;
+    case MeleeVisualType::Down:
+        if (stage == 0) {
+            cells.push_back({0, 1, '!'});
+        } else {
+            cells.push_back({0, 1, 'v'});
+            cells.push_back({0, 2, '!'});
+        }
+        break;
+    }
+
+    return cells;
+}
+
+void startMeleeVisual(SandboxState& state,
+                      MeleeVisualType type,
+                      const game::Position& origin,
+                      game::FacingDirection facing) {
+    state.meleeVisual.active = true;
+    state.meleeVisual.elapsedFrames = 0;
+    state.meleeVisual.totalFrames = kMeleeVisualFrames;
+    state.meleeVisual.type = type;
+    state.meleeVisual.origin = origin;
+    state.meleeVisual.facing = facing;
+}
+
+std::vector<game::Position> buildDownSlamDamageCells(const SandboxState& state) {
+    std::vector<game::Position> cells;
+
+    for (int y = state.downSlamCast.origin.y + 1; y <= state.downSlamCast.impact.y - 1; ++y) {
+        cells.push_back(game::Position(state.downSlamCast.origin.x, y));
+    }
+
+    for (int dx = -1; dx <= 1; ++dx) {
+        cells.push_back(game::Position(state.downSlamCast.impact.x + dx, state.downSlamCast.impact.y));
+    }
+
+    return cells;
+}
+
+bool isEnemyAt(const std::vector<SandboxEnemy>& enemies, const game::Position& position, int ignoreId) {
+    for (size_t index = 0; index < enemies.size(); ++index) {
+        const game::Position enemyPosition = enemies[index].groundEnemy.getPosition();
+        if (enemies[index].id != ignoreId &&
+            enemies[index].groundEnemy.isAlive() &&
+            enemyPosition.x == position.x &&
+            enemyPosition.y == position.y) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool canEnemyOccupy(const std::string& gameplayMap,
+                    const std::vector<SandboxEnemy>& enemies,
+                    const game::Position& playerPosition,
+                    const game::Position& targetPosition,
+                    int ignoreId) {
+    if (!isInsidePlayableArea(gameplayMap, targetPosition)) {
+        return false;
+    }
+
+    if (tileAt(gameplayMap, targetPosition) != ' ') {
+        return false;
+    }
+
+    if (targetPosition.x == playerPosition.x && targetPosition.y == playerPosition.y) {
+        return false;
+    }
+
+    return !isEnemyAt(enemies, targetPosition, ignoreId);
+}
+
+std::string buildCollisionMap(const std::string& gameplayMap, const std::vector<SandboxEnemy>& enemies) {
+    std::string collisionMap = gameplayMap;
+    for (size_t index = 0; index < enemies.size(); ++index) {
+        if (enemies[index].groundEnemy.isAlive()) {
+            placeGlyph(collisionMap, enemies[index].groundEnemy.getPosition(), 'g');
+        }
+    }
+    return collisionMap;
+}
+
 bool canSpendSoul(SandboxState& state, int soulCost) {
     if (state.infiniteSoulMode) {
         return true;
@@ -195,6 +701,12 @@ bool isDummyInMeleeRange(const game::Position& playerPosition,
     return deltaX <= -1 && deltaX >= -kAttackRange;
 }
 
+bool isEnemyInMeleeRange(const game::Position& playerPosition,
+                         const game::Position& enemyPosition,
+                         game::FacingDirection facing) {
+    return isDummyInMeleeRange(playerPosition, enemyPosition, facing);
+}
+
 void registerDummyHit(SandboxState& state,
                       const std::string& attackName,
                       bool grantsSoul,
@@ -210,6 +722,119 @@ void registerDummyHit(SandboxState& state,
         state.lastResult = "Wooden dummy hit. Soul gain simulated.";
     } else {
         state.lastResult = "Wooden dummy hit.";
+    }
+}
+
+void registerGroundEnemyHit(SandboxState& state,
+                            const std::string& attackName,
+                            int hitCount,
+                            bool grantsSoul,
+                            int soulGainAmount,
+                            int defeatedCount) {
+    state.lastAction = attackName;
+
+    if (grantsSoul && !state.infiniteSoulMode) {
+        state.stats.soul.current = std::min(state.stats.soul.maximum, state.stats.soul.current + soulGainAmount * hitCount);
+    }
+
+    std::ostringstream result;
+    result << "Hit " << hitCount << (hitCount == 1 ? " ground enemy." : " ground enemies.");
+
+    if (grantsSoul) {
+        result << " Soul gain simulated.";
+    }
+
+    if (defeatedCount > 0) {
+        result << " Defeated " << defeatedCount << ".";
+    }
+
+    state.lastResult = result.str();
+}
+
+int applyDamageToGroundEnemies(std::vector<SandboxEnemy>& enemies,
+                               const game::Position& playerPosition,
+                               game::FacingDirection facing,
+                               const game::DamageInfo& damageInfo) {
+    int hitCount = 0;
+
+    for (size_t index = 0; index < enemies.size(); ++index) {
+        if (!enemies[index].groundEnemy.isAlive()) {
+            continue;
+        }
+
+        if (isEnemyInMeleeRange(playerPosition, enemies[index].groundEnemy.getPosition(), facing)) {
+            enemies[index].groundEnemy.takeDamage(damageInfo);
+            hitCount++;
+        }
+    }
+
+    return hitCount;
+}
+
+bool applyDamageToEnemyAtPosition(std::vector<SandboxEnemy>& enemies,
+                                  const game::Position& targetPosition,
+                                  const game::DamageInfo& damageInfo) {
+    for (size_t index = 0; index < enemies.size(); ++index) {
+        if (!enemies[index].groundEnemy.isAlive()) {
+            continue;
+        }
+
+        const game::Position enemyPosition = enemies[index].groundEnemy.getPosition();
+        if (enemyPosition.x == targetPosition.x && enemyPosition.y == targetPosition.y) {
+            enemies[index].groundEnemy.takeDamage(damageInfo);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void removeDefeatedGroundEnemies(std::vector<SandboxEnemy>& enemies, SandboxState& state) {
+    std::vector<SandboxEnemy> survivors;
+    int defeatedNow = 0;
+
+    for (size_t index = 0; index < enemies.size(); ++index) {
+        if (!enemies[index].groundEnemy.shouldDespawn()) {
+            survivors.push_back(enemies[index]);
+        } else {
+            defeatedNow++;
+        }
+    }
+
+    if (defeatedNow > 0) {
+        state.defeatedGroundEnemies += defeatedNow;
+    }
+
+    enemies.swap(survivors);
+}
+
+bool spawnGroundEnemy(std::vector<SandboxEnemy>& enemies,
+                      SandboxState& state,
+                      const std::string& gameplayMap,
+                      const game::Position& playerPosition,
+                      const game::Position& spawnPosition) {
+    if (!canEnemyOccupy(gameplayMap, enemies, playerPosition, spawnPosition, -1)) {
+        return false;
+    }
+
+    enemies.push_back(SandboxEnemy(state.nextEnemyId++, spawnPosition));
+    state.groundEnemySpawns++;
+    return true;
+}
+
+void updateGroundEnemies(std::vector<SandboxEnemy>& enemies,
+                         const std::string& gameplayMap,
+                         const game::Position& playerPosition) {
+    for (size_t index = 0; index < enemies.size(); ++index) {
+        const game::Position previousPosition = enemies[index].groundEnemy.getPosition();
+        enemies[index].groundEnemy.updateAI(playerPosition, static_cast<float>(kFrameMs) / 1000.0f);
+        const game::Position nextPosition = enemies[index].groundEnemy.getPosition();
+
+        if (enemies[index].groundEnemy.isAlive() &&
+            (nextPosition.x != previousPosition.x || nextPosition.y != previousPosition.y) &&
+            !canEnemyOccupy(gameplayMap, enemies, playerPosition, nextPosition, enemies[index].id)) {
+            enemies[index].groundEnemy.setPosition(previousPosition);
+        }
     }
 }
 
@@ -240,7 +865,7 @@ void castHorizontalWave(SandboxState& state, const game::Position& playerPositio
     projectile.dx = state.facing == game::FacingDirection::Right ? 1 : -1;
     projectile.dy = 0;
     projectile.remainingFrames = 28;
-    projectile.glyph = '=';
+    projectile.totalFrames = projectile.remainingFrames;
     projectile.label = "Horizontal wave";
     state.projectiles.push_back(projectile);
     state.lastResult = state.infiniteSoulMode ? "Cast in infinite soul mode." : "Consumed 33 soul.";
@@ -248,55 +873,49 @@ void castHorizontalWave(SandboxState& state, const game::Position& playerPositio
 
 void castUpWave(SandboxState& state, const game::Position& playerPosition) {
     state.lastAction = "Up Soul Wave";
+    if (state.upWaveCast.active) {
+        state.lastResult = "Up wave is already active.";
+        return;
+    }
+
     if (!canSpendSoul(state, 33)) {
         state.lastResult = "Not enough soul.";
         return;
     }
 
-    VisualProjectile projectile;
-    projectile.position = game::Position(playerPosition.x, playerPosition.y - 1);
-    projectile.dx = 0;
-    projectile.dy = -1;
-    projectile.remainingFrames = 18;
-    projectile.glyph = '|';
-    projectile.label = "Up wave";
-    state.projectiles.push_back(projectile);
-    state.lastResult = state.infiniteSoulMode ? "Cast in infinite soul mode." : "Consumed 33 soul.";
+    state.upWaveCast.active = true;
+    state.upWaveCast.damageResolved = false;
+    state.upWaveCast.elapsedFrames = 0;
+    state.upWaveCast.totalFrames = kUpWaveCastFrames;
+    state.upWaveCast.origin = playerPosition;
+    state.lastResult = state.infiniteSoulMode ? "Soul gathers above the head." : "Soul gathers upward. Consumed 33 soul.";
 }
 
 void castDownSlam(SandboxState& state,
                   const std::string& map,
                   const game::Position& playerPosition,
-                  const game::Position& dummyPosition) {
+                  const game::Position& dummyPosition,
+                  std::vector<SandboxEnemy>& enemies) {
+    (void)dummyPosition;
+    (void)enemies;
     state.lastAction = "Down Slam";
+    if (state.downSlamCast.active) {
+        state.lastResult = "Down slam is already active.";
+        return;
+    }
+
     if (!canSpendSoul(state, 33)) {
         state.lastResult = "Not enough soul.";
         return;
     }
 
-    VisualEffect effect;
-    effect.remainingFrames = 8;
-    effect.glyph = '!';
-
-    for (int y = playerPosition.y + 1; y < dummyPosition.y + 2; ++y) {
-        game::Position cell(playerPosition.x, y);
-        if (!isInsidePlayableArea(map, cell)) {
-            break;
-        }
-        if (tileAt(map, cell) == '=') {
-            break;
-        }
-        effect.cells.push_back(cell);
-    }
-
-    state.effects.push_back(effect);
-
-    if (dummyPosition.x == playerPosition.x && dummyPosition.y > playerPosition.y) {
-        registerDummyHit(state, "Down Slam", false, 0);
-        return;
-    }
-
-    state.lastResult = state.infiniteSoulMode ? "Cast in infinite soul mode." : "Consumed 33 soul.";
+    state.downSlamCast.active = true;
+    state.downSlamCast.damageResolved = false;
+    state.downSlamCast.elapsedFrames = 0;
+    state.downSlamCast.totalFrames = kDownSlamCastFrames;
+    state.downSlamCast.origin = playerPosition;
+    state.downSlamCast.impact = findDownSlamImpactPosition(map, playerPosition);
+    state.lastResult = state.infiniteSoulMode ? "Black force gathers below the feet." : "Black force gathers below. Consumed 33 soul.";
 }
 
 void startHealCast(SandboxState& state) {
@@ -350,7 +969,175 @@ void updateHealCast(SandboxState& state) {
     state.lastResult = "Channeling soul heal...";
 }
 
-void updateProjectiles(SandboxState& state, const std::string& map, const game::Position& dummyPosition) {
+void updateUpWaveCast(SandboxState& state,
+                      const std::string& map,
+                      const game::Position& dummyPosition,
+                      std::vector<SandboxEnemy>& enemies) {
+    if (!state.upWaveCast.active) {
+        return;
+    }
+
+    state.upWaveCast.elapsedFrames++;
+    const int stage = upWaveStage(state);
+
+    if (!state.upWaveCast.damageResolved && stage >= 3) {
+        int enemyHits = 0;
+        const std::vector<game::Position> damageCells = buildUpWaveDamageCells(map, state.upWaveCast.origin, stage >= 4);
+
+        for (size_t enemyIndex = 0; enemyIndex < enemies.size(); ++enemyIndex) {
+            if (!enemies[enemyIndex].groundEnemy.isAlive()) {
+                continue;
+            }
+
+            const game::Position enemyPosition = enemies[enemyIndex].groundEnemy.getPosition();
+            for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
+                if (enemyPosition.x == damageCells[cellIndex].x && enemyPosition.y == damageCells[cellIndex].y) {
+                    enemies[enemyIndex].groundEnemy.takeDamage(
+                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulWaveUp, "player", true));
+                    enemyHits++;
+                    break;
+                }
+            }
+        }
+
+        if (enemyHits > 0) {
+            const int defeatedBefore = state.defeatedGroundEnemies;
+            removeDefeatedGroundEnemies(enemies, state);
+            registerGroundEnemyHit(
+                    state,
+                    "Up Soul Wave",
+                    enemyHits,
+                    false,
+                    0,
+                    state.defeatedGroundEnemies - defeatedBefore);
+        } else {
+            for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
+                if (dummyPosition.x == damageCells[cellIndex].x && dummyPosition.y == damageCells[cellIndex].y) {
+                    registerDummyHit(state, "Up Soul Wave", false, 0);
+                    break;
+                }
+            }
+        }
+
+        state.upWaveCast.damageResolved = true;
+    }
+
+    if (state.upWaveCast.elapsedFrames >= state.upWaveCast.totalFrames) {
+        state.upWaveCast.active = false;
+        if (state.lastAction == "Up Soul Wave" &&
+            (state.lastResult == "Soul gathers above the head." ||
+             state.lastResult == "Soul gathers upward. Consumed 33 soul.")) {
+            state.lastResult = "Soul crown dissipated.";
+        }
+        return;
+    }
+
+    if (state.lastAction != "Up Soul Wave" || !state.upWaveCast.damageResolved) {
+        state.lastAction = "Up Soul Wave";
+        if (stage <= 1) {
+            state.lastResult = "Soul gathers above the head.";
+        } else if (stage <= 3) {
+            state.lastResult = "Soul column surges upward.";
+        } else {
+            state.lastResult = "Soul crown bursts overhead.";
+        }
+    }
+}
+
+void updateDownSlamCast(SandboxState& state,
+                        const std::string& map,
+                        const game::Position& dummyPosition,
+                        std::vector<SandboxEnemy>& enemies) {
+    if (!state.downSlamCast.active) {
+        return;
+    }
+
+    state.downSlamCast.elapsedFrames++;
+    const int stage = downSlamStage(state);
+
+    if (!state.downSlamCast.damageResolved && stage >= 2) {
+        int enemyHits = 0;
+        const std::vector<game::Position> damageCells = buildDownSlamDamageCells(state);
+
+        for (size_t enemyIndex = 0; enemyIndex < enemies.size(); ++enemyIndex) {
+            if (!enemies[enemyIndex].groundEnemy.isAlive()) {
+                continue;
+            }
+
+            const game::Position enemyPosition = enemies[enemyIndex].groundEnemy.getPosition();
+            for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
+                if (enemyPosition.x == damageCells[cellIndex].x && enemyPosition.y == damageCells[cellIndex].y) {
+                    enemies[enemyIndex].groundEnemy.takeDamage(
+                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulSlam, "player", true));
+                    enemyHits++;
+                    break;
+                }
+            }
+        }
+
+        if (enemyHits > 0) {
+            const int defeatedBefore = state.defeatedGroundEnemies;
+            removeDefeatedGroundEnemies(enemies, state);
+            registerGroundEnemyHit(
+                    state,
+                    "Down Slam",
+                    enemyHits,
+                    false,
+                    0,
+                    state.defeatedGroundEnemies - defeatedBefore);
+        } else {
+            for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
+                if (dummyPosition.x == damageCells[cellIndex].x && dummyPosition.y == damageCells[cellIndex].y) {
+                    registerDummyHit(state, "Down Slam", false, 0);
+                    break;
+                }
+            }
+        }
+
+        state.downSlamCast.damageResolved = true;
+    }
+
+    if (state.downSlamCast.elapsedFrames >= state.downSlamCast.totalFrames) {
+        state.downSlamCast.active = false;
+        if (state.lastAction == "Down Slam" &&
+            (state.lastResult == "Black force gathers below the feet." ||
+             state.lastResult == "Black force gathers below. Consumed 33 soul.")) {
+            state.lastResult = "Impact haze dissipated.";
+        }
+        return;
+    }
+
+    if (state.lastAction != "Down Slam" || !state.downSlamCast.damageResolved) {
+        state.lastAction = "Down Slam";
+        if (stage == 0) {
+            state.lastResult = "Black force gathers below the feet.";
+        } else if (stage == 1) {
+            state.lastResult = "The black spike drives downward.";
+        } else if (stage == 2) {
+            state.lastResult = "The ground bursts from the impact.";
+        } else {
+            state.lastResult = "Dark shockwave fades away.";
+        }
+    }
+
+    (void)map;
+}
+
+void updateMeleeVisual(SandboxState& state) {
+    if (!state.meleeVisual.active) {
+        return;
+    }
+
+    state.meleeVisual.elapsedFrames++;
+    if (state.meleeVisual.elapsedFrames >= state.meleeVisual.totalFrames) {
+        state.meleeVisual.active = false;
+    }
+}
+
+void updateProjectiles(SandboxState& state,
+                       const std::string& map,
+                       const game::Position& dummyPosition,
+                       std::vector<SandboxEnemy>& enemies) {
     std::vector<VisualProjectile> activeProjectiles;
 
     for (size_t index = 0; index < state.projectiles.size(); ++index) {
@@ -369,6 +1156,18 @@ void updateProjectiles(SandboxState& state, const std::string& map, const game::
 
         const char tile = tileAt(map, projectile.position);
         if (tile == '=') {
+            continue;
+        }
+
+        const game::DamageType damageType = projectile.dy < 0
+                ? game::DamageType::SoulWaveUp
+                : game::DamageType::SoulWaveHorizontal;
+        if (applyDamageToEnemyAtPosition(
+                enemies,
+                projectile.position,
+                game::DamageInfo(kPlayerAttackDamage, damageType, "player", true))) {
+            state.lastAction = projectile.label;
+            state.lastResult = "Projectile hit 1 ground enemy.";
             continue;
         }
 
@@ -398,42 +1197,33 @@ void updateEffects(SandboxState& state) {
 }
 
 std::vector<std::string> buildSoulVesselLines(const SandboxState& state) {
-    const int rimWidth = 8;
-    const int upperWidth = 10;
-    const int lowerWidth = 10;
-    const int baseWidth = 8;
-    const int totalFillUnits = rimWidth + upperWidth + lowerWidth + baseWidth;
+    const int totalFillUnits = 3;
     const int fillUnits = state.stats.soul.maximum == 0
             ? 0
             : (state.stats.soul.current * totalFillUnits) / state.stats.soul.maximum;
 
-    int remainingFill = fillUnits;
-
-    const int baseFill = std::min(baseWidth, remainingFill);
-    remainingFill -= baseFill;
-    const int lowerFill = std::min(lowerWidth, remainingFill);
-    remainingFill -= lowerFill;
-    const int upperFill = std::min(upperWidth, remainingFill);
-    remainingFill -= upperFill;
-    const int rimFill = std::min(rimWidth, remainingFill);
-
-    char fillGlyph = '#';
+    char fillGlyph = 'o';
     if (state.healCast.active) {
-        const char pulseGlyphs[] = {'@', '*', '#', '*'};
+        const char pulseGlyphs[] = {'o', 'O', '*', 'O'};
         const int pulseIndex = (state.healCast.elapsedFrames / 5) % 4;
         fillGlyph = pulseGlyphs[pulseIndex];
     }
 
+    std::string fill = "   ";
+    if (fillUnits >= 3) {
+        fill = std::string(3, fillGlyph);
+    } else if (fillUnits == 2) {
+        fill = std::string(2, fillGlyph) + " ";
+    } else if (fillUnits == 1) {
+        fill = std::string(" ") + fillGlyph + " ";
+    }
+
     std::vector<std::string> lines;
     lines.push_back("SOUL");
-    lines.push_back("      .-''''-.");
-    lines.push_back("   .-'        '-.");
-    lines.push_back("  /  " + std::string(rimFill, fillGlyph) + std::string(rimWidth - rimFill, ' ') + "  \\");
-    lines.push_back(" |   " + std::string(upperFill, fillGlyph) + std::string(upperWidth - upperFill, ' ') + "   |");
-    lines.push_back(" |   " + std::string(lowerFill, fillGlyph) + std::string(lowerWidth - lowerFill, ' ') + "   |");
-    lines.push_back("  \\  " + std::string(baseFill, fillGlyph) + std::string(baseWidth - baseFill, ' ') + "  /");
-    lines.push_back("   '-.________.-'");
-    lines.push_back("      " + std::to_string(state.stats.soul.current) + "/" + std::to_string(state.stats.soul.maximum));
+    lines.push_back("    /-\\");
+    lines.push_back("   |" + fill + "|");
+    lines.push_back("    \\_/");
+    lines.push_back("   " + std::to_string(state.stats.soul.current) + "/" + std::to_string(state.stats.soul.maximum));
     return lines;
 }
 
@@ -464,7 +1254,7 @@ std::string buildHealthOrbLine(const SandboxState& state) {
     return line.str();
 }
 
-std::string buildHud(const SandboxState& state) {
+std::string buildHud(const SandboxState& state, int activeGroundEnemies) {
     std::ostringstream hud;
     const std::vector<std::string> soulLines = buildSoulVesselLines(state);
     for (size_t index = 0; index < soulLines.size(); ++index) {
@@ -475,6 +1265,7 @@ std::string buildHud(const SandboxState& state) {
         << " | Soul Debug " << state.stats.soul.current << "/" << state.stats.soul.maximum << "\n";
     hud << "[HeroSandbox] ESC exit | P infinite soul (" << (state.infiniteSoulMode ? "ON" : "OFF") << ")\n";
     hud << "Move A/D  Jump SPACE  Basic J  Up I  Down K  Wave L  UpWave O  Slam M  Heal R  SelfDamage H\n";
+    hud << "Spawn Ground Enemy: 1 | Spawn Pair: 2 | Clear Enemies: C\n";
     hud << "Facing " << (state.facing == game::FacingDirection::Right ? "Right" : "Left")
         << " | Heal Ready " << (state.framesSinceLastDamage >= kHealLockoutFrames ? "YES" : "NO") << "\n";
     hud << "Dummy Hits " << state.dummyHitCount
@@ -482,6 +1273,9 @@ std::string buildHud(const SandboxState& state) {
         << " | Self Damage " << state.selfDamageCount
         << " | Heals " << state.successfulHealCount
         << " | Heal Fails " << state.failedHealCount << "\n";
+    hud << "Ground Enemies Active " << activeGroundEnemies
+        << " | Spawned " << state.groundEnemySpawns
+        << " | Defeated " << state.defeatedGroundEnemies << "\n";
     hud << "Last Action: " << state.lastAction << "\n";
     hud << "Last Result: " << state.lastResult << "\n\n";
     return hud.str();
@@ -514,12 +1308,80 @@ void overlayHealParticles(std::string& renderMap, const std::string& gameplayMap
     }
 }
 
-std::string buildRenderMap(const std::string& gameplayMap, const SandboxState& state) {
+void overlayUpWaveCast(std::string& renderMap, const std::string& gameplayMap, const SandboxState& state) {
+    if (!state.upWaveCast.active) {
+        return;
+    }
+
+    const int stage = upWaveStage(state);
+    const std::vector<SpellVisualCell> cells = buildUpWaveVisualCells(stage);
+
+    for (size_t index = 0; index < cells.size(); ++index) {
+        const game::Position target(state.upWaveCast.origin.x + cells[index].dx,
+                                    state.upWaveCast.origin.y + cells[index].dy);
+        if (!isInsidePlayableArea(gameplayMap, target) || tileAt(gameplayMap, target) == '=') {
+            continue;
+        }
+        placeGlyph(renderMap, target, cells[index].glyph);
+    }
+}
+
+void overlayDownSlamCast(std::string& renderMap, const std::string& gameplayMap, const SandboxState& state) {
+    if (!state.downSlamCast.active) {
+        return;
+    }
+
+    const std::vector<SpellVisualCell> cells = buildDownSlamVisualCells(state);
+    for (size_t index = 0; index < cells.size(); ++index) {
+        const game::Position target(state.downSlamCast.origin.x + cells[index].dx,
+                                    state.downSlamCast.origin.y + cells[index].dy);
+        if (!isInsidePlayableArea(gameplayMap, target) || tileAt(gameplayMap, target) == '=') {
+            continue;
+        }
+        placeGlyph(renderMap, target, cells[index].glyph);
+    }
+}
+
+void overlayMeleeVisual(std::string& renderMap, const std::string& gameplayMap, const SandboxState& state) {
+    if (!state.meleeVisual.active) {
+        return;
+    }
+
+    const std::vector<SpellVisualCell> cells = buildMeleeVisualCells(state);
+    for (size_t index = 0; index < cells.size(); ++index) {
+        const game::Position target(state.meleeVisual.origin.x + cells[index].dx,
+                                    state.meleeVisual.origin.y + cells[index].dy);
+        if (!isInsidePlayableArea(gameplayMap, target) || tileAt(gameplayMap, target) == '=') {
+            continue;
+        }
+        placeGlyph(renderMap, target, cells[index].glyph);
+    }
+}
+
+std::string buildRenderMap(const std::string& gameplayMap,
+                           const SandboxState& state,
+                           const std::vector<SandboxEnemy>& enemies) {
     std::string renderMap = gameplayMap;
     const game::Position dummyPosition = findGlyphPosition(gameplayMap, 'T');
 
+    for (size_t index = 0; index < enemies.size(); ++index) {
+        if (enemies[index].groundEnemy.isRenderable()) {
+            placeGlyph(renderMap,
+                       enemies[index].groundEnemy.getPosition(),
+                       enemies[index].groundEnemy.getRenderGlyph());
+        }
+    }
+
     for (size_t index = 0; index < state.projectiles.size(); ++index) {
-        placeGlyph(renderMap, state.projectiles[index].position, state.projectiles[index].glyph);
+        const std::vector<SpellVisualCell> projectileCells = buildHorizontalWaveVisualCells(state.projectiles[index]);
+        for (size_t cellIndex = 0; cellIndex < projectileCells.size(); ++cellIndex) {
+            const game::Position target(state.projectiles[index].position.x + projectileCells[cellIndex].dx,
+                                        state.projectiles[index].position.y + projectileCells[cellIndex].dy);
+            if (!isInsidePlayableArea(gameplayMap, target) || tileAt(gameplayMap, target) == '=') {
+                continue;
+            }
+            placeGlyph(renderMap, target, projectileCells[cellIndex].glyph);
+        }
     }
 
     for (size_t effectIndex = 0; effectIndex < state.effects.size(); ++effectIndex) {
@@ -533,6 +1395,9 @@ std::string buildRenderMap(const std::string& gameplayMap, const SandboxState& s
     }
 
     overlayHealParticles(renderMap, gameplayMap, state);
+    overlayMeleeVisual(renderMap, gameplayMap, state);
+    overlayUpWaveCast(renderMap, gameplayMap, state);
+    overlayDownSlamCast(renderMap, gameplayMap, state);
 
     if (state.blinkFramesRemaining > 0 && ((state.blinkFramesRemaining / 5) % 2 == 0)) {
         const game::Position playerPosition = findGlyphPosition(gameplayMap, '@');
@@ -552,6 +1417,7 @@ int main() {
     Player player(keyStateManager);
     SandboxState state;
     std::string gameplayMap = kArenaMap;
+    std::vector<SandboxEnemy> groundEnemies;
 
     while (true) {
         keyStateManager.clearKeys();
@@ -561,15 +1427,25 @@ int main() {
             break;
         }
 
-        const bool playerLockedByHeal = state.healCast.active;
-        if (!playerLockedByHeal) {
+        const bool playerLockedByCast = state.healCast.active || state.downSlamCast.active;
+        if (!playerLockedByCast) {
             if (isKeyDown(keyStateManager, 'a') || isKeyDown(keyStateManager, 'A')) {
                 state.facing = game::FacingDirection::Left;
             } else if (isKeyDown(keyStateManager, 'd') || isKeyDown(keyStateManager, 'D')) {
                 state.facing = game::FacingDirection::Right;
             }
 
-            player.move(gameplayMap);
+            std::string collisionMap = buildCollisionMap(gameplayMap, groundEnemies);
+            const game::Position previousPlayerPosition = findGlyphPosition(gameplayMap, '@');
+            player.move(collisionMap);
+            const game::Position movedPlayerPosition = findGlyphPosition(collisionMap, '@');
+
+            if (previousPlayerPosition.x >= 0 && previousPlayerPosition.y >= 0) {
+                placeGlyph(gameplayMap, previousPlayerPosition, ' ');
+            }
+            if (movedPlayerPosition.x >= 0 && movedPlayerPosition.y >= 0) {
+                placeGlyph(gameplayMap, movedPlayerPosition, '@');
+            }
         }
 
         if (state.framesSinceLastDamage < kHealLockoutFrames) {
@@ -585,68 +1461,144 @@ int main() {
         const game::Position dummyPosition = findGlyphPosition(gameplayMap, 'T');
         const bool dummyInMeleeRange = isDummyInMeleeRange(playerPosition, dummyPosition, state.facing);
 
-        if (!playerLockedByHeal && (isJustPressed(keyStateManager, state, 'p') || isJustPressed(keyStateManager, state, 'P'))) {
+        if (!playerLockedByCast && isJustPressed(keyStateManager, state, '1')) {
+            const game::Position spawnPoint = kGroundEnemySpawnPoints[state.groundEnemySpawns % kGroundEnemySpawnPoints.size()];
+            state.lastAction = "Spawn Ground Enemy";
+            if (spawnGroundEnemy(groundEnemies, state, gameplayMap, playerPosition, spawnPoint)) {
+                state.lastResult = "Spawned 1 ground enemy.";
+            } else {
+                state.lastResult = "Spawn point blocked.";
+            }
+        }
+
+        if (!playerLockedByCast && isJustPressed(keyStateManager, state, '2')) {
+            int spawned = 0;
+            for (size_t index = 0; index < kGroundEnemySpawnPoints.size() && spawned < 2; ++index) {
+                if (spawnGroundEnemy(groundEnemies, state, gameplayMap, playerPosition, kGroundEnemySpawnPoints[index])) {
+                    spawned++;
+                }
+            }
+
+            state.lastAction = "Spawn Ground Enemy Pair";
+            if (spawned > 0) {
+                state.lastResult = "Spawned " + std::to_string(spawned) + " ground enemies.";
+            } else {
+                state.lastResult = "All spawn points are blocked.";
+            }
+        }
+
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'c') || isJustPressed(keyStateManager, state, 'C'))) {
+            groundEnemies.clear();
+            state.lastAction = "Clear Ground Enemies";
+            state.lastResult = "Cleared all spawned ground enemies.";
+        }
+
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'p') || isJustPressed(keyStateManager, state, 'P'))) {
             state.infiniteSoulMode = !state.infiniteSoulMode;
             state.lastAction = "Toggle Infinite Soul";
             state.lastResult = state.infiniteSoulMode ? "Infinite soul enabled." : "Infinite soul disabled.";
         }
 
-        if (!playerLockedByHeal && (isJustPressed(keyStateManager, state, 'h') || isJustPressed(keyStateManager, state, 'H'))) {
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'h') || isJustPressed(keyStateManager, state, 'H'))) {
             applySelfDamage(state);
         }
 
-        if (!playerLockedByHeal && (isJustPressed(keyStateManager, state, 'j') || isJustPressed(keyStateManager, state, 'J'))) {
-            state.lastAction = "Basic Attack";
-            if (dummyInMeleeRange) {
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'j') || isJustPressed(keyStateManager, state, 'J'))) {
+            startMeleeVisual(state, MeleeVisualType::Horizontal, playerPosition, state.facing);
+            const int defeatedBefore = state.defeatedGroundEnemies;
+            const int enemyHits = applyDamageToGroundEnemies(
+                    groundEnemies,
+                    playerPosition,
+                    state.facing,
+                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
+            removeDefeatedGroundEnemies(groundEnemies, state);
+            const int defeatedThisHit = state.defeatedGroundEnemies - defeatedBefore;
+
+            if (enemyHits > 0) {
+                registerGroundEnemyHit(state, "Basic Attack", enemyHits, true, 11, defeatedThisHit);
+            } else if (dummyInMeleeRange) {
                 registerDummyHit(state, "Basic Attack", true, 11);
             } else {
+                state.lastAction = "Basic Attack";
                 state.lastResult = "No target in range.";
             }
         }
 
-        if (!playerLockedByHeal && (isJustPressed(keyStateManager, state, 'i') || isJustPressed(keyStateManager, state, 'I'))) {
-            state.lastAction = "Up Slash";
-            if (dummyInMeleeRange) {
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'i') || isJustPressed(keyStateManager, state, 'I'))) {
+            startMeleeVisual(state, MeleeVisualType::Up, playerPosition, state.facing);
+            const int defeatedBefore = state.defeatedGroundEnemies;
+            const int enemyHits = applyDamageToGroundEnemies(
+                    groundEnemies,
+                    playerPosition,
+                    state.facing,
+                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true));
+            removeDefeatedGroundEnemies(groundEnemies, state);
+
+            if (enemyHits > 0) {
+                registerGroundEnemyHit(state, "Up Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
+            } else if (dummyInMeleeRange) {
                 registerDummyHit(state, "Up Slash", false, 0);
             } else {
+                state.lastAction = "Up Slash";
                 state.lastResult = "Slash triggered. No target in range.";
             }
         }
 
-        if (!playerLockedByHeal && (isJustPressed(keyStateManager, state, 'k') || isJustPressed(keyStateManager, state, 'K'))) {
-            state.lastAction = "Down Slash";
-            if (dummyInMeleeRange) {
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'k') || isJustPressed(keyStateManager, state, 'K'))) {
+            startMeleeVisual(state, MeleeVisualType::Down, playerPosition, state.facing);
+            const int defeatedBefore = state.defeatedGroundEnemies;
+            const int enemyHits = applyDamageToGroundEnemies(
+                    groundEnemies,
+                    playerPosition,
+                    state.facing,
+                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true));
+            removeDefeatedGroundEnemies(groundEnemies, state);
+
+            if (enemyHits > 0) {
+                registerGroundEnemyHit(state, "Down Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
+            } else if (dummyInMeleeRange) {
                 registerDummyHit(state, "Down Slash", false, 0);
             } else {
+                state.lastAction = "Down Slash";
                 state.lastResult = "Slash triggered. No target in range.";
             }
         }
 
-        if (!playerLockedByHeal && (isJustPressed(keyStateManager, state, 'l') || isJustPressed(keyStateManager, state, 'L'))) {
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'l') || isJustPressed(keyStateManager, state, 'L'))) {
             castHorizontalWave(state, playerPosition);
         }
 
-        if (!playerLockedByHeal && (isJustPressed(keyStateManager, state, 'o') || isJustPressed(keyStateManager, state, 'O'))) {
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'o') || isJustPressed(keyStateManager, state, 'O'))) {
             castUpWave(state, playerPosition);
         }
 
-        if (!playerLockedByHeal && (isJustPressed(keyStateManager, state, 'm') || isJustPressed(keyStateManager, state, 'M'))) {
-            castDownSlam(state, gameplayMap, playerPosition, dummyPosition);
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'm') || isJustPressed(keyStateManager, state, 'M'))) {
+            castDownSlam(state, gameplayMap, playerPosition, dummyPosition, groundEnemies);
         }
 
-        if (!playerLockedByHeal && (isJustPressed(keyStateManager, state, 'r') || isJustPressed(keyStateManager, state, 'R'))) {
+        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'r') || isJustPressed(keyStateManager, state, 'R'))) {
             startHealCast(state);
         }
 
-        updateProjectiles(state, gameplayMap, dummyPosition);
+        updateDownSlamCast(state, gameplayMap, dummyPosition, groundEnemies);
+        updateUpWaveCast(state, gameplayMap, dummyPosition, groundEnemies);
+        updateMeleeVisual(state);
+        updateProjectiles(state, gameplayMap, dummyPosition, groundEnemies);
         updateEffects(state);
         updateHealCast(state);
+        updateGroundEnemies(groundEnemies, gameplayMap, playerPosition);
+        removeDefeatedGroundEnemies(groundEnemies, state);
+
+        state.stats.soul.maximum = kSoulMeterMax;
+        if (!state.infiniteSoulMode && state.stats.soul.current > state.stats.soul.maximum) {
+            state.stats.soul.current = state.stats.soul.maximum;
+        }
 
         if (state.infiniteSoulMode) {
             state.stats.soul.current = state.stats.soul.maximum;
         }
 
-        mapDrawer.currentmap = buildHud(state) + buildRenderMap(gameplayMap, state);
+        mapDrawer.currentmap = buildHud(state, static_cast<int>(groundEnemies.size())) + buildRenderMap(gameplayMap, state, groundEnemies);
         mapDrawer.draw();
 
         state.previousKeys = keyStateManager.keyStates;

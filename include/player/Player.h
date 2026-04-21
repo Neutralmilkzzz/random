@@ -1,21 +1,154 @@
-//
-// Created by ender on 2026/4/20.
-//
-
 #ifndef TESTCPP1_PLAYER_H
 #define TESTCPP1_PLAYER_H
 
-
-#include <vector>
 #include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "input/KeyStateManager.h"
+#include "shared/GameTypes.h"
+
+namespace game {
+class GroundEnemy;
+}
 
 class Player {
 public:
+    explicit Player(KeyStateManager& keyStateManager);
 
-    KeyStateManager& ksm;
+    std::vector<int> getPalce();
+
+    void resetRuntimeState();
+    void move(std::string& currentmap);
+    void updateCombat(const std::string& gameplayMap, game::GroundEnemy& groundEnemy);
+    void receiveDamage(const std::string& sourceLabel);
+
+    bool isMovementLocked() const;
+    bool isVisible() const;
+    bool isAlive() const;
+
+    const game::CharacterStats& getStats() const;
+    game::FacingDirection getFacingDirection() const;
+
+    std::string buildHud() const;
+    void overlayRender(std::string& renderMap, const std::string& gameplayMap) const;
+
+    bool isGrounded(const std::string& currentmap, size_t pos);
+    bool applyGravity(std::string& currentmap, size_t pos);
+    bool jumpUp(std::string& currentmap, size_t pos);
 
 private:
+    struct VisualProjectile {
+        game::Position position;
+        int dx;
+        int dy;
+        int remainingFrames;
+        int totalFrames;
+        std::string label;
+
+        VisualProjectile()
+            : dx(0),
+              dy(0),
+              remainingFrames(0),
+              totalFrames(0) {
+        }
+    };
+
+    struct SpellVisualCell {
+        int dx;
+        int dy;
+        char glyph;
+
+        SpellVisualCell(int dxValue = 0, int dyValue = 0, char glyphValue = ' ')
+            : dx(dxValue), dy(dyValue), glyph(glyphValue) {
+        }
+    };
+
+    struct RewardPopupState {
+        bool active;
+        int elapsedFrames;
+        int totalFrames;
+        int amount;
+
+        RewardPopupState()
+            : active(false),
+              elapsedFrames(0),
+              totalFrames(24),
+              amount(0) {
+        }
+    };
+
+    enum class MeleeVisualType {
+        Horizontal,
+        Up,
+        Down
+    };
+
+    struct HealCastState {
+        bool active;
+        int elapsedFrames;
+        int totalFrames;
+
+        HealCastState()
+            : active(false),
+              elapsedFrames(0),
+              totalFrames(42) {
+        }
+    };
+
+    struct UpWaveCastState {
+        bool active;
+        bool damageResolved;
+        int elapsedFrames;
+        int totalFrames;
+        game::Position origin;
+
+        UpWaveCastState()
+            : active(false),
+              damageResolved(false),
+              elapsedFrames(0),
+              totalFrames(18),
+              origin(-1, -1) {
+        }
+    };
+
+    struct DownSlamCastState {
+        bool active;
+        bool damageResolved;
+        int elapsedFrames;
+        int totalFrames;
+        game::Position origin;
+        game::Position impact;
+
+        DownSlamCastState()
+            : active(false),
+              damageResolved(false),
+              elapsedFrames(0),
+              totalFrames(16),
+              origin(-1, -1),
+              impact(-1, -1) {
+        }
+    };
+
+    struct MeleeVisualState {
+        bool active;
+        int elapsedFrames;
+        int totalFrames;
+        MeleeVisualType type;
+        game::Position origin;
+        game::FacingDirection facing;
+
+        MeleeVisualState()
+            : active(false),
+              elapsedFrames(0),
+              totalFrames(6),
+              type(MeleeVisualType::Horizontal),
+              origin(-1, -1),
+              facing(game::FacingDirection::Right) {
+        }
+    };
+
+    KeyStateManager& ksm;
     bool isJumping;
     bool jumpHeldLastFrame;
     float horizontalMoveAccumulator;
@@ -26,17 +159,66 @@ private:
     float minimumJumpRiseRemaining;
     float riseVelocityDropAccumulator;
 
-public:
-    Player(KeyStateManager& ksm);
+    game::CharacterStats stats;
+    game::HitFeedbackState hitFeedback;
+    game::FacingDirection facing;
+    int framesSinceLastDamage;
+    int blinkFramesRemaining;
+    HealCastState healCast;
+    UpWaveCastState upWaveCast;
+    DownSlamCastState downSlamCast;
+    MeleeVisualState meleeVisual;
+    RewardPopupState rewardPopup;
+    std::vector<VisualProjectile> projectiles;
+    std::unordered_map<int, bool> previousKeys;
+    std::string lastAction;
+    std::string lastResult;
 
-    std::vector<int> getPalce();
+    bool isKeyDown(int keyCode) const;
+    bool wasKeyDown(int keyCode) const;
+    bool isJustPressed(int keyCode) const;
+    bool canSpendSoul(int soulCost);
 
-    void move(std::string &currentmap);
+    void updateFacingFromInput();
+    void updateBlink();
+    void updateHealCast();
+    void updateRewardPopup();
+    void updateUpWaveCast(const std::string& gameplayMap, game::GroundEnemy& groundEnemy);
+    void updateDownSlamCast(const std::string& gameplayMap, game::GroundEnemy& groundEnemy);
+    void updateMeleeVisual();
+    void updateProjectiles(const std::string& gameplayMap, game::GroundEnemy& groundEnemy);
 
-    // 辅助函数
-    bool isGrounded(const std::string &currentmap, size_t pos);
-    bool applyGravity(std::string &currentmap, size_t pos);  // 返回是否下落了
-    bool jumpUp(std::string &currentmap, size_t pos);        // 返回是否上升了
+    void castHorizontalWave(const game::Position& playerPosition);
+    void castUpWave(const game::Position& playerPosition);
+    void castDownSlam(const std::string& gameplayMap, const game::Position& playerPosition);
+    void startHealCast();
+    void startMeleeVisual(MeleeVisualType type, const game::Position& origin);
+
+    int upWaveStage() const;
+    int downSlamStage() const;
+    int meleeVisualStage() const;
+
+    bool isEnemyInMeleeRange(const game::Position& playerPosition,
+                             const game::Position& enemyPosition) const;
+    bool applyDamageToEnemyAtPosition(game::GroundEnemy& groundEnemy,
+                                      const game::Position& targetPosition,
+                                      const game::DamageInfo& damageInfo);
+    bool applyDamageToEnemyInMeleeRange(game::GroundEnemy& groundEnemy,
+                                        const game::Position& playerPosition,
+                                        const game::DamageInfo& damageInfo);
+    void grantKillReward(int amount);
+    game::Position findDownSlamImpactPosition(const std::string& gameplayMap,
+                                              const game::Position& origin) const;
+
+    std::vector<SpellVisualCell> buildHorizontalWaveVisualCells(const VisualProjectile& projectile) const;
+    std::vector<SpellVisualCell> buildUpWaveVisualCells() const;
+    std::vector<SpellVisualCell> buildDownSlamVisualCells() const;
+    std::vector<SpellVisualCell> buildMeleeVisualCells() const;
+    std::vector<game::Position> buildUpWaveDamageCells(const std::string& gameplayMap, bool includeCrown) const;
+    std::vector<game::Position> buildDownSlamDamageCells() const;
+
+    std::vector<std::string> buildSoulVesselLines() const;
+    std::string buildHealthOrbLine() const;
 };
 
-#endif //TESTCPP1_PLAYER_H
+#endif // TESTCPP1_PLAYER_H

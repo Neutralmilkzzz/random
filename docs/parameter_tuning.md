@@ -93,13 +93,49 @@
 | enemy_ground | 血量 | ground_enemy_health_max | 3 | 血量 | 地面普通敌人最大血量 |
 | enemy_ground | 索敌 | ground_enemy_aggro_range | 10 | 格 | 玩家进入该范围后开始追击 |
 | enemy_ground | 脱战 | ground_enemy_lose_aggro_range | 16 | 格 | 玩家超出该范围后停止追击并回归出生点 |
+| enemy_ground | 巡逻 | ground_enemy_patrol_range | 3 | 格 | 待机时围绕出生点左右巡逻的半径 |
+| enemy_ground | 巡逻 | ground_enemy_patrol_pause | 0.20 | 秒 | 巡逻走到端点后短暂停顿时间 |
 | enemy_ground | 预警 | ground_enemy_alert_range | 7 | 格 | 玩家进入该范围后触发 `!!!` 预警 |
 | enemy_ground | 近战 | ground_enemy_attack_range | 2 | 格 | Dash 攻击命中的有效范围 |
 | enemy_ground | 前摇 | ground_enemy_attack_startup | 0.35 | 秒 | `!!!` 预警持续时间 |
 | enemy_ground | 冲刺 | ground_enemy_dash_step_time | 0.035 | 秒/格 | Dash 每前进一步的时间 |
 | enemy_ground | 恢复 | ground_enemy_attack_recovery | 1.0 | 秒 | 每次攻击完成后的恢复期 |
+| enemy_ground | 奖励 | ground_enemy_hkd_reward | 10 | HKD | 玩家击杀地面普通敌人后获得的金钱 |
 
 ## 11. 地面普通敌人附带规则
 
 - 地面普通敌人的血条当前按 3 格血量理解。
 - 地面普通敌人当前的主要攻击方式为：`!!!` 预警后向玩家方向 Dash。
+- 当前击杀地面普通敌人后，玩家会获得 10 HKD，并在玩家头顶短暂显示 `+10` 飘字。
+
+## 12. 飞行敌人参数
+
+| 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| enemy_flying | 移动 | flying_enemy_move_cooldown_frames | 8 | 帧 | 每次移动后的等待帧数，当前显著慢于玩家水平移动 |
+| enemy_flying | 攻击 | flying_enemy_attack_cooldown_frames | 70 | 帧 | 一次火球攻击结束后的冷却时间 |
+| enemy_flying | 前摇 | flying_enemy_attack_startup_frames | 18 | 帧 | 头顶 `!!!` 预警持续时间 |
+| enemy_flying | 弹道 | flying_enemy_projectile_step_frames | 3 | 帧 | 火球每前进一步的间隔 |
+| enemy_flying | 索敌 | flying_enemy_aggro_range | 12 | 格 | 玩家进入该范围后，飞行敌人开始调整位置并准备攻击 |
+| enemy_flying | 悬停 | flying_enemy_hover_band | 2 | 格 | 围绕出生高度上下浮动的范围 |
+| enemy_flying | 伤害 | flying_enemy_fireball_damage | 1 | 伤害 | 火球命中玩家造成 1 点伤害 |
+
+## 13. 飞行敌人附带规则
+
+- 飞行敌人当前采用“慢速悬停 + `!!!` 前摇 + 发射火球”的简化实现。
+- 玩家距离较远时，飞行敌人主要围绕出生点上下悬停。
+- 玩家进入索敌范围后，飞行敌人会缓慢贴近并对准高度，再发起火球攻击。
+
+## 14. 敌人受击 / 死亡反馈规则
+
+| 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| enemy_common | 受击反馈 | enemy_hit_flash_duration | 0.12 | 秒 | 受伤时仅闪一次 `*`，随后立即恢复原字形 |
+| enemy_common | 死亡反馈 | enemy_death_flash_duration | 0.07 | 秒 | 死亡第一帧显示 `*` |
+| enemy_common | 死亡反馈 | enemy_death_marker_duration | 0.07 | 秒 | 死亡第二帧显示 `x`，随后立即消失 |
+
+## 15. 敌人受击 / 死亡附带规则
+
+- 普通敌人受伤反馈统一按 `g/f -> * -> g/f` 处理，整体保持很短，不做拖沓动画。
+- 普通敌人死亡反馈统一按 `g/f -> * -> x -> 空` 处理，2 到 3 个视觉阶段后立即消失。
+- 当前阶段先**不做敌人血条**，优先保证受击和死亡反馈足够短、清楚、利落。

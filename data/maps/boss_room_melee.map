@@ -1,0 +1,27 @@
+id=boss_room_melee
+display_name=Melee Boss Room
+type=BossRoom
+boss_room=true
+
+[spawn_points]
+boss_gate,3,8
+
+[enemy_spawns]
+boss_melee,46,8
+
+[npc_placements]
+
+[transitions]
+boss_room_melee,spawn_village,village_entry
+
+[terrain]
+============================================================================
+=                                                                          =
+=                                                                          =
+=                                                                          =
+=             ==========                          ==========                =
+=                                                                          =
+=                                                                          =
+=                                                                          =
+=  @                                                                       =
+============================================================================

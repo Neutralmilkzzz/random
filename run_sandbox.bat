@@ -25,7 +25,7 @@ set "EXTRA_SRCS="
 if /I "%SANDBOX%"=="player" (
     set "TARGET=player_sandbox.exe"
     set "ENTRY=src\sandbox\PlayerSandbox.cpp"
-    set "EXTRA_SRCS=src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
+    set "EXTRA_SRCS=src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
 )
 
 if /I "%SANDBOX%"=="skill" (
@@ -47,6 +47,7 @@ if /I "%SANDBOX%"=="enemy" (
 if /I "%SANDBOX%"=="world" (
     set "TARGET=world_sandbox.exe"
     set "ENTRY=src\sandbox\WorldSandbox.cpp"
+    set "EXTRA_SRCS=src\world\WorldSystem.cpp"
 )
 
 if "%ENTRY%"=="" (

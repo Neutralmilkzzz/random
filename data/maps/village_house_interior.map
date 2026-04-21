@@ -1,0 +1,27 @@
+id=village_house_interior
+display_name=Village House
+type=ShopRoom
+boss_room=false
+
+[spawn_points]
+house_entry,8,8
+
+[enemy_spawns]
+
+[npc_placements]
+merchant,20,8
+
+[transitions]
+village_house_interior,spawn_village,village_entry,6,8
+
+[terrain]
+============================================================================
+=                                                                          =
+=                                                                          =
+=                                                                          =
+=      ==========================================                          =
+=      =                                        =                          =
+=      =                                        =                          =
+=      =                                        =                          =
+=      =                                        =                          =
+============================================================================
