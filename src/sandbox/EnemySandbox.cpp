@@ -18,11 +18,7 @@ namespace {
 
 const int kFrameMs = 16;
 const int kPlayerInvulnerabilityFrames = 45;
-const int kFlyingMoveCooldownFrames = 8;
-const int kFlyingAttackCooldownFrames = 70;
-const int kFlyingAttackStartupFrames = 18;
 const int kFlyingProjectileStepFrames = 3;
-const int kFlyingAggroRange = 12;
 const int kMaxEnemies = 16;
 
 const std::string kArenaTemplate =
@@ -46,12 +42,7 @@ struct SandboxEnemy {
     int id;
     SandboxEnemyType type;
     game::GroundEnemy groundEnemy;
-    game::Position position;
-    int moveCooldown;
-    int attackCooldown;
-    int attackStartupFrames;
-    int hoverDirection;
-    game::Position anchorPosition;
+    game::FlyingEnemy flyingEnemy;
 };
 
 struct EnemyProjectile {
@@ -169,7 +160,7 @@ bool isEnemyAt(const std::vector<SandboxEnemy>& enemies, const game::Position& p
     for (size_t index = 0; index < enemies.size(); ++index) {
         const game::Position enemyPosition = enemies[index].type == SandboxEnemyType::Ground
                                                  ? enemies[index].groundEnemy.getPosition()
-                                                 : enemies[index].position;
+                                                 : enemies[index].flyingEnemy.getPosition();
         if (enemies[index].id != ignoreId &&
             enemyPosition.x == position.x &&
             enemyPosition.y == position.y) {
@@ -209,7 +200,7 @@ std::string buildCollisionMap(const std::string& terrainMap,
     for (size_t index = 0; index < enemies.size(); ++index) {
         const game::Position enemyPosition = enemies[index].type == SandboxEnemyType::Ground
                                                  ? enemies[index].groundEnemy.getPosition()
-                                                 : enemies[index].position;
+                                                 : enemies[index].flyingEnemy.getPosition();
         placeGlyph(collisionMap,
                    enemyPosition,
                    enemies[index].type == SandboxEnemyType::Ground ? 'g' : 'f');
@@ -227,13 +218,15 @@ std::string buildRenderMap(const std::string& terrainMap,
     for (size_t index = 0; index < enemies.size(); ++index) {
         const game::Position enemyPosition = enemies[index].type == SandboxEnemyType::Ground
                                                  ? enemies[index].groundEnemy.getPosition()
-                                                 : enemies[index].position;
+                                                 : enemies[index].flyingEnemy.getPosition();
         if (enemies[index].type == SandboxEnemyType::Ground) {
             if (enemies[index].groundEnemy.isRenderable()) {
                 placeGlyph(renderMap, enemyPosition, enemies[index].groundEnemy.getRenderGlyph());
             }
         } else {
-            placeGlyph(renderMap, enemyPosition, 'f');
+            if (enemies[index].flyingEnemy.isRenderable()) {
+                placeGlyph(renderMap, enemyPosition, enemies[index].flyingEnemy.getRenderGlyph());
+            }
         }
 
         if (enemies[index].type == SandboxEnemyType::Ground &&
@@ -243,7 +236,7 @@ std::string buildRenderMap(const std::string& terrainMap,
             placeGlyph(renderMap, warningRow, '!');
             placeGlyph(renderMap, game::Position(warningRow.x + 1, warningRow.y), '!');
         } else if (enemies[index].type == SandboxEnemyType::Flying &&
-                   enemies[index].attackStartupFrames > 0) {
+                   enemies[index].flyingEnemy.getState() == game::FlyingEnemyState::AttackStartup) {
             const game::Position warningRow(enemyPosition.x, enemyPosition.y - 1);
             placeGlyph(renderMap, game::Position(warningRow.x - 1, warningRow.y), '!');
             placeGlyph(renderMap, warningRow, '!');
@@ -332,15 +325,11 @@ bool spawnEnemy(std::vector<SandboxEnemy>& enemies,
     SandboxEnemy enemy;
     enemy.id = state.nextEnemyId++;
     enemy.type = type;
-    enemy.attackCooldown = 0;
-    enemy.moveCooldown = 0;
-    enemy.attackStartupFrames = 0;
-    enemy.hoverDirection = 1;
-    enemy.position = spawnPosition;
-    enemy.anchorPosition = spawnPosition;
 
     if (type == SandboxEnemyType::Ground) {
         enemy.groundEnemy = game::GroundEnemy("ground_enemy_" + std::to_string(enemy.id), spawnPosition);
+    } else {
+        enemy.flyingEnemy = game::FlyingEnemy("flying_enemy_" + std::to_string(enemy.id), spawnPosition);
     }
 
     enemies.push_back(enemy);
@@ -406,22 +395,22 @@ void damagePlayer(SandboxState& state, const std::string& sourceLabel) {
     }
 }
 
-void spawnFlyingProjectile(SandboxEnemy& enemy,
+void spawnFlyingProjectile(const game::FlyingEnemy& enemy,
                            const game::Position& playerPosition,
                            SandboxState& state) {
     EnemyProjectile projectile;
-    projectile.position = enemy.position;
-    if (playerPosition.x > enemy.position.x) {
+    projectile.position = enemy.getPosition();
+    if (playerPosition.x > enemy.getPosition().x) {
         projectile.dx = 1;
-    } else if (playerPosition.x < enemy.position.x) {
+    } else if (playerPosition.x < enemy.getPosition().x) {
         projectile.dx = -1;
     } else {
         projectile.dx = 0;
     }
 
-    if (playerPosition.y < enemy.position.y - 1) {
+    if (playerPosition.y < enemy.getPosition().y - 1) {
         projectile.dy = -1;
-    } else if (playerPosition.y > enemy.position.y + 1) {
+    } else if (playerPosition.y > enemy.getPosition().y + 1) {
         projectile.dy = 1;
     } else {
         projectile.dy = 0;
@@ -500,77 +489,19 @@ void updateFlyingEnemy(SandboxEnemy& enemy,
                        const std::vector<SandboxEnemy>& enemies,
                        const game::Position& playerPosition,
                        SandboxState& state) {
-    if (enemy.attackCooldown > 0) {
-        enemy.attackCooldown--;
-    }
-    if (enemy.moveCooldown > 0) {
-        enemy.moveCooldown--;
-    }
-    if (enemy.attackStartupFrames > 0) {
-        enemy.attackStartupFrames--;
+    const game::Position previousPosition = enemy.flyingEnemy.getPosition();
+    enemy.flyingEnemy.updateAI(playerPosition, static_cast<float>(kFrameMs) / 1000.0f);
+    const game::Position nextPosition = enemy.flyingEnemy.getPosition();
+
+    if (enemy.flyingEnemy.isAlive() &&
+        (nextPosition.x != previousPosition.x || nextPosition.y != previousPosition.y) &&
+        !canEnemyOccupy(terrainMap, enemies, playerPosition, nextPosition, enemy.id)) {
+        enemy.flyingEnemy.setPosition(previousPosition);
     }
 
-    const int deltaX = playerPosition.x - enemy.position.x;
-    const int deltaY = playerPosition.y - enemy.position.y;
-
-    if (enemy.attackStartupFrames == 1) {
-        spawnFlyingProjectile(enemy, playerPosition, state);
-        enemy.attackCooldown = kFlyingAttackCooldownFrames;
+    if (enemy.flyingEnemy.consumeProjectileTrigger()) {
+        spawnFlyingProjectile(enemy.flyingEnemy, playerPosition, state);
         state.lastEvent = "Flying enemy launched a fireball.";
-        return;
-    }
-
-    if (enemy.attackStartupFrames > 0) {
-        return;
-    }
-
-    if (std::abs(deltaX) <= kFlyingAggroRange &&
-        std::abs(deltaY) <= 4 &&
-        enemy.attackCooldown == 0) {
-        enemy.attackStartupFrames = kFlyingAttackStartupFrames;
-        state.lastEvent = "Flying enemy is charging a fireball.";
-        return;
-    }
-
-    if (enemy.moveCooldown > 0) {
-        return;
-    }
-
-    game::Position next = enemy.position;
-    if (std::abs(deltaX) <= kFlyingAggroRange) {
-        if (deltaX != 0) {
-            next.x += deltaX > 0 ? 1 : -1;
-        }
-        if (std::abs(deltaY) > 2) {
-            next.y += deltaY > 0 ? 1 : -1;
-        }
-    } else {
-        const int verticalOffset = enemy.position.y - enemy.anchorPosition.y;
-        if (verticalOffset >= 2) {
-            enemy.hoverDirection = -1;
-        } else if (verticalOffset <= -2) {
-            enemy.hoverDirection = 1;
-        }
-        next.y += enemy.hoverDirection;
-    }
-
-    if (canEnemyOccupy(terrainMap, enemies, playerPosition, next, enemy.id)) {
-        enemy.position = next;
-        enemy.moveCooldown = kFlyingMoveCooldownFrames;
-        return;
-    }
-
-    game::Position horizontal(enemy.position.x + (deltaX == 0 ? 0 : (deltaX > 0 ? 1 : -1)), enemy.position.y);
-    if (deltaX != 0 && canEnemyOccupy(terrainMap, enemies, playerPosition, horizontal, enemy.id)) {
-        enemy.position = horizontal;
-        enemy.moveCooldown = kFlyingMoveCooldownFrames;
-        return;
-    }
-
-    const game::Position vertical(enemy.position.x, enemy.position.y + enemy.hoverDirection);
-    if (canEnemyOccupy(terrainMap, enemies, playerPosition, vertical, enemy.id)) {
-        enemy.position = vertical;
-        enemy.moveCooldown = kFlyingMoveCooldownFrames;
     }
 }
 

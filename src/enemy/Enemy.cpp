@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 
 #include "enemy/Enemy.h"
@@ -374,6 +375,312 @@ void GroundEnemy::startDashAttack(const Position& playerPosition) {
     state = GroundEnemyState::DashAttack;
     dashStepsRemaining = std::max(3, std::min(5, std::abs(deltaX)));
     dashAccumulator = 0.0f;
+}
+
+FlyingEnemy::FlyingEnemy(const std::string& enemyId, const Position& initialSpawnPosition)
+    : id(enemyId),
+      position(initialSpawnPosition),
+      spawnPosition(initialSpawnPosition),
+      facingDirection(FacingDirection::Left),
+      state(FlyingEnemyState::Idle),
+      alive(true),
+      projectileTriggerQueued(false),
+      moveAccumulator(0.0f),
+      attackStartupRemaining(0.0f),
+      attackRecoveryRemaining(0.0f),
+      aggroRange(12.0f),
+      loseAggroRange(18.0f),
+      alertRange(8.0f),
+      hoverRange(2.0f),
+      moveStepSeconds(0.24f),
+      attackStartupSeconds(0.30f),
+      attackRecoverySeconds(0.80f),
+      hitFlashSeconds(0.12f),
+      deathFlashSeconds(0.07f),
+      deathMarkerSeconds(0.07f),
+      deathAnimationRemaining(0.0f),
+      hoverDirection(1) {
+    stats.health.current = 2;
+    stats.health.maximum = 2;
+}
+
+const std::string& FlyingEnemy::getId() const {
+    return id;
+}
+
+Position FlyingEnemy::getPosition() const {
+    return position;
+}
+
+FacingDirection FlyingEnemy::getFacingDirection() const {
+    return facingDirection;
+}
+
+const CharacterStats& FlyingEnemy::getStats() const {
+    return stats;
+}
+
+CharacterStats& FlyingEnemy::accessStats() {
+    return stats;
+}
+
+HitFeedbackState& FlyingEnemy::accessHitFeedback() {
+    return hitFeedback;
+}
+
+void FlyingEnemy::takeDamage(const DamageInfo& damageInfo) {
+    if (!alive || hitFeedback.invulnerabilitySeconds > 0.0f) {
+        return;
+    }
+
+    stats.health.current -= damageInfo.amount;
+    hitFeedback.blinking = true;
+    hitFeedback.blinkDurationSeconds = hitFlashSeconds;
+    hitFeedback.invulnerabilitySeconds = hitFlashSeconds;
+
+    if (stats.health.current <= 0) {
+        stats.health.current = 0;
+        alive = false;
+        state = FlyingEnemyState::Dead;
+        projectileTriggerQueued = false;
+        attackStartupRemaining = 0.0f;
+        attackRecoveryRemaining = 0.0f;
+        hitFeedback.blinking = false;
+        hitFeedback.blinkDurationSeconds = 0.0f;
+        hitFeedback.invulnerabilitySeconds = 0.0f;
+        deathAnimationRemaining = deathFlashSeconds + deathMarkerSeconds;
+    }
+}
+
+bool FlyingEnemy::isAlive() const {
+    return alive;
+}
+
+EnemyType FlyingEnemy::getEnemyType() const {
+    return EnemyType::Flying;
+}
+
+void FlyingEnemy::updateAI(const Position& playerPosition, float deltaSeconds) {
+    updateHitFeedback(deltaSeconds);
+
+    if (!alive) {
+        state = FlyingEnemyState::Dead;
+        return;
+    }
+
+    const int deltaX = playerPosition.x - position.x;
+    const int deltaY = playerPosition.y - position.y;
+    const float absX = static_cast<float>(std::abs(deltaX));
+    const float absY = static_cast<float>(std::abs(deltaY));
+
+    if (deltaX < 0) {
+        facingDirection = FacingDirection::Left;
+    } else if (deltaX > 0) {
+        facingDirection = FacingDirection::Right;
+    }
+
+    if (state != FlyingEnemyState::AttackStartup &&
+        state != FlyingEnemyState::AttackRecovery &&
+        absX > loseAggroRange) {
+        state = FlyingEnemyState::ReturnToPost;
+    }
+
+    if (state == FlyingEnemyState::AttackStartup) {
+        attackStartupRemaining -= deltaSeconds;
+        if (attackStartupRemaining <= 0.0f) {
+            attackStartupRemaining = 0.0f;
+            projectileTriggerQueued = true;
+            state = FlyingEnemyState::AttackRecovery;
+            attackRecoveryRemaining = attackRecoverySeconds;
+        }
+        return;
+    }
+
+    if (state == FlyingEnemyState::AttackRecovery) {
+        attackRecoveryRemaining -= deltaSeconds;
+        if (attackRecoveryRemaining <= 0.0f) {
+            attackRecoveryRemaining = 0.0f;
+            if (absX <= aggroRange && absY <= 5.0f) {
+                state = FlyingEnemyState::Chase;
+            } else {
+                state = FlyingEnemyState::ReturnToPost;
+            }
+        }
+        return;
+    }
+
+    if (state == FlyingEnemyState::Idle && absX <= aggroRange && absY <= 5.0f) {
+        state = FlyingEnemyState::Chase;
+        return;
+    }
+
+    if (state == FlyingEnemyState::Idle) {
+        if (position.x != spawnPosition.x) {
+            moveToward(Position(spawnPosition.x, position.y), deltaSeconds);
+            return;
+        }
+
+        if (position.y >= spawnPosition.y + static_cast<int>(hoverRange)) {
+            hoverDirection = -1;
+        } else if (position.y <= spawnPosition.y - static_cast<int>(hoverRange)) {
+            hoverDirection = 1;
+        }
+
+        moveToward(Position(spawnPosition.x, position.y + hoverDirection), deltaSeconds);
+        return;
+    }
+
+    if (state == FlyingEnemyState::ReturnToPost) {
+        if (position.x == spawnPosition.x && position.y == spawnPosition.y) {
+            state = FlyingEnemyState::Idle;
+            moveAccumulator = 0.0f;
+            return;
+        }
+
+        moveToward(spawnPosition, deltaSeconds);
+        return;
+    }
+
+    if (state == FlyingEnemyState::Chase) {
+        if (absX > loseAggroRange) {
+            state = FlyingEnemyState::ReturnToPost;
+            return;
+        }
+
+        if (absX <= alertRange && absY <= 3.0f) {
+            startAttack();
+            return;
+        }
+
+        Position target = position;
+        if (deltaX != 0) {
+            target.x += deltaX > 0 ? 1 : -1;
+        }
+        if (std::abs(deltaY) > 1) {
+            target.y += deltaY > 0 ? 1 : -1;
+        }
+        moveToward(target, deltaSeconds);
+    }
+}
+
+AttackDefinition FlyingEnemy::getPrimaryAttack() const {
+    return getFireballAttack();
+}
+
+AttackDefinition FlyingEnemy::getFireballAttack() const {
+    AttackDefinition attack;
+    attack.id = id + "_fireball";
+    attack.damage = DamageInfo(1, DamageType::Fireball, id, false);
+    attack.startupSeconds = attackStartupSeconds;
+    attack.activeSeconds = 0.12f;
+    attack.recoverySeconds = attackRecoverySeconds;
+    return attack;
+}
+
+int FlyingEnemy::getHkdReward() const {
+    return 10;
+}
+
+void FlyingEnemy::setPosition(const Position& newPosition) {
+    position = newPosition;
+}
+
+void FlyingEnemy::setSpawnPosition(const Position& newSpawnPosition) {
+    spawnPosition = newSpawnPosition;
+}
+
+Position FlyingEnemy::getSpawnPosition() const {
+    return spawnPosition;
+}
+
+FlyingEnemyState FlyingEnemy::getState() const {
+    return state;
+}
+
+bool FlyingEnemy::consumeProjectileTrigger() {
+    if (!projectileTriggerQueued) {
+        return false;
+    }
+
+    projectileTriggerQueued = false;
+    return true;
+}
+
+bool FlyingEnemy::isRenderable() const {
+    return alive || deathAnimationRemaining > 0.0f;
+}
+
+bool FlyingEnemy::shouldDespawn() const {
+    return !alive && deathAnimationRemaining <= 0.0f;
+}
+
+char FlyingEnemy::getRenderGlyph() const {
+    if (!alive) {
+        if (deathAnimationRemaining > deathMarkerSeconds) {
+            return '*';
+        }
+        if (deathAnimationRemaining > 0.0f) {
+            return 'x';
+        }
+        return ' ';
+    }
+
+    if (hitFeedback.blinking) {
+        return '*';
+    }
+
+    return 'f';
+}
+
+void FlyingEnemy::updateHitFeedback(float deltaSeconds) {
+    if (hitFeedback.blinkDurationSeconds > 0.0f) {
+        hitFeedback.blinkDurationSeconds -= deltaSeconds;
+        if (hitFeedback.blinkDurationSeconds <= 0.0f) {
+            hitFeedback.blinkDurationSeconds = 0.0f;
+            hitFeedback.blinking = false;
+        }
+    }
+
+    if (hitFeedback.invulnerabilitySeconds > 0.0f) {
+        hitFeedback.invulnerabilitySeconds -= deltaSeconds;
+        if (hitFeedback.invulnerabilitySeconds < 0.0f) {
+            hitFeedback.invulnerabilitySeconds = 0.0f;
+        }
+    }
+
+    if (deathAnimationRemaining > 0.0f) {
+        deathAnimationRemaining -= deltaSeconds;
+        if (deathAnimationRemaining < 0.0f) {
+            deathAnimationRemaining = 0.0f;
+        }
+    }
+}
+
+void FlyingEnemy::moveToward(const Position& targetPosition, float deltaSeconds) {
+    if (position.x == targetPosition.x && position.y == targetPosition.y) {
+        moveAccumulator = 0.0f;
+        return;
+    }
+
+    moveAccumulator += deltaSeconds;
+    while (moveAccumulator >= moveStepSeconds) {
+        moveAccumulator -= moveStepSeconds;
+
+        if (position.x != targetPosition.x) {
+            position.x += position.x < targetPosition.x ? 1 : -1;
+        }
+
+        if (position.y != targetPosition.y) {
+            position.y += position.y < targetPosition.y ? 1 : -1;
+        }
+    }
+}
+
+void FlyingEnemy::startAttack() {
+    state = FlyingEnemyState::AttackStartup;
+    attackStartupRemaining = attackStartupSeconds;
+    projectileTriggerQueued = false;
+    moveAccumulator = 0.0f;
 }
 
 } // namespace game

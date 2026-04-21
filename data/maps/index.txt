@@ -2,3 +2,5 @@ spawn_village
 village_house_interior
 combat_room_01
 boss_room_melee
+
+editor_map

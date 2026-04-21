@@ -112,19 +112,25 @@
 
 | 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| enemy_flying | 移动 | flying_enemy_move_cooldown_frames | 8 | 帧 | 每次移动后的等待帧数，当前显著慢于玩家水平移动 |
-| enemy_flying | 攻击 | flying_enemy_attack_cooldown_frames | 70 | 帧 | 一次火球攻击结束后的冷却时间 |
-| enemy_flying | 前摇 | flying_enemy_attack_startup_frames | 18 | 帧 | 头顶 `!!!` 预警持续时间 |
-| enemy_flying | 弹道 | flying_enemy_projectile_step_frames | 3 | 帧 | 火球每前进一步的间隔 |
-| enemy_flying | 索敌 | flying_enemy_aggro_range | 12 | 格 | 玩家进入该范围后，飞行敌人开始调整位置并准备攻击 |
+| enemy_flying | 血量 | flying_enemy_health_current | 2 | 血量 | 飞行敌人当前实装血量 |
+| enemy_flying | 血量 | flying_enemy_health_max | 2 | 血量 | 飞行敌人最大血量 |
+| enemy_flying | 索敌 | flying_enemy_aggro_range | 12 | 格 | 玩家进入该范围后，飞行敌人开始追踪 |
+| enemy_flying | 脱战 | flying_enemy_lose_aggro_range | 18 | 格 | 玩家超出该范围后停止追击并回到出生点 |
+| enemy_flying | 预警 | flying_enemy_alert_range | 8 | 格 | 玩家进入该范围后触发 `!!!` 并准备发射火球 |
 | enemy_flying | 悬停 | flying_enemy_hover_band | 2 | 格 | 围绕出生高度上下浮动的范围 |
+| enemy_flying | 移动 | flying_enemy_move_step_time | 0.24 | 秒/步 | 飞行敌人每次位移的步进时间，显著慢于玩家 |
+| enemy_flying | 前摇 | flying_enemy_attack_startup | 0.30 | 秒 | 头顶 `!!!` 预警持续时间 |
+| enemy_flying | 恢复 | flying_enemy_attack_recovery | 0.80 | 秒 | 每次发射火球后的恢复期 |
+| enemy_flying | 弹道 | flying_enemy_projectile_step_frames | 3 | 帧 | 火球每前进一步的间隔 |
 | enemy_flying | 伤害 | flying_enemy_fireball_damage | 1 | 伤害 | 火球命中玩家造成 1 点伤害 |
+| enemy_flying | 奖励 | flying_enemy_hkd_reward | 10 | HKD | 玩家击杀飞行敌人后获得的金钱 |
 
 ## 13. 飞行敌人附带规则
 
-- 飞行敌人当前采用“慢速悬停 + `!!!` 前摇 + 发射火球”的简化实现。
+- 飞行敌人当前已按正式模块 demo 方式实现：慢速悬停、索敌追踪、`!!!` 前摇、发射火球、恢复、脱战回位。
 - 玩家距离较远时，飞行敌人主要围绕出生点上下悬停。
 - 玩家进入索敌范围后，飞行敌人会缓慢贴近并对准高度，再发起火球攻击。
+- 飞行敌人同样使用短受击与短死亡反馈，不额外挂血条。
 
 ## 14. 敌人受击 / 死亡反馈规则
 

@@ -243,6 +243,10 @@ std::string buildRenderMap(const std::string& terrainMap,
                    getNpcInfo(mapDefinition.npcPlacements[index].npcId).glyph);
     }
 
+    for (size_t index = 0; index < mapDefinition.transitions.size(); ++index) {
+        placeGlyph(renderMap, mapDefinition.transitions[index].triggerPosition, 'D');
+    }
+
     placeGlyph(renderMap, playerPosition, '@');
     return renderMap;
 }
@@ -356,10 +360,12 @@ void updatePrompt(const game::MapDefinition& mapDefinition,
 
     const game::MapTransition* transition = findInteractableTransition(mapDefinition, playerPosition);
     if (transition != 0) {
-        if (mapDefinition.id == "spawn_village") {
+        if (mapDefinition.id == "spawn_village" && transition->toMapId == "village_house_interior") {
             state.prompt = "Press E to enter the house.";
-        } else {
+        } else if (mapDefinition.id == "village_house_interior") {
             state.prompt = "Press E to leave the house.";
+        } else {
+            state.prompt = "Press E to use door.";
         }
         return;
     }

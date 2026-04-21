@@ -11,6 +11,7 @@ ifeq ($(OS),Windows_NT)
     COMBAT_SANDBOX_TARGET = combat_sandbox.exe
     ENEMY_SANDBOX_TARGET = enemy_sandbox.exe
     WORLD_SANDBOX_TARGET = world_sandbox.exe
+    MAP_EDITOR_SANDBOX_TARGET = map_editor_sandbox.exe
 else
     TARGET = testcpp1
     PLAYER_SANDBOX_TARGET = player_sandbox
@@ -18,6 +19,7 @@ else
     COMBAT_SANDBOX_TARGET = combat_sandbox
     ENEMY_SANDBOX_TARGET = enemy_sandbox
     WORLD_SANDBOX_TARGET = world_sandbox
+    MAP_EDITOR_SANDBOX_TARGET = map_editor_sandbox
 endif
 
 # 可复用源文件
@@ -52,7 +54,7 @@ OBJS = $(SRCS:.cpp=.o)
 all: $(TARGET)
 
 # 沙盒集合
-sandboxes: $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET)
+sandboxes: $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) $(MAP_EDITOR_SANDBOX_TARGET)
 
 # 链接可执行文件
 $(TARGET): $(OBJS)
@@ -73,6 +75,9 @@ $(ENEMY_SANDBOX_TARGET): src/sandbox/EnemySandbox.cpp src/enemy/Enemy.cpp $(RUNT
 $(WORLD_SANDBOX_TARGET): src/sandbox/WorldSandbox.cpp src/world/WorldSystem.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/WorldSandbox.cpp src/world/WorldSystem.cpp $(LDFLAGS)
 
+$(MAP_EDITOR_SANDBOX_TARGET): src/sandbox/MapEditorSandbox.cpp src/world/WorldSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ src/sandbox/MapEditorSandbox.cpp src/world/WorldSystem.cpp src/enemy/Enemy.cpp $(RUNTIME_SRCS) $(LDFLAGS)
+
 # 编译源文件
 %.o: %.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -87,8 +92,9 @@ ifeq ($(OS),Windows_NT)
 	@if exist $(COMBAT_SANDBOX_TARGET) del /Q $(COMBAT_SANDBOX_TARGET) 2>nul
 	@if exist $(ENEMY_SANDBOX_TARGET) del /Q $(ENEMY_SANDBOX_TARGET) 2>nul
 	@if exist $(WORLD_SANDBOX_TARGET) del /Q $(WORLD_SANDBOX_TARGET) 2>nul
+	@if exist $(MAP_EDITOR_SANDBOX_TARGET) del /Q $(MAP_EDITOR_SANDBOX_TARGET) 2>nul
 else
-	@rm -f $(OBJS) $(TARGET) $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) 2>/dev/null || true
+	@rm -f $(OBJS) $(TARGET) $(PLAYER_SANDBOX_TARGET) $(SKILL_SANDBOX_TARGET) $(COMBAT_SANDBOX_TARGET) $(ENEMY_SANDBOX_TARGET) $(WORLD_SANDBOX_TARGET) $(MAP_EDITOR_SANDBOX_TARGET) 2>/dev/null || true
 endif
 	@echo "清理完成"
 
@@ -166,6 +172,7 @@ help:
 	@echo "  make run-combat-sandbox  - 运行战斗沙盒"
 	@echo "  make run-enemy-sandbox   - 运行敌人沙盒"
 	@echo "  make run-world-sandbox   - 运行世界沙盒"
+	@echo "  make sandboxes           - 编译全部沙盒（含地图编辑器）"
 	@echo "  make debug   - 编译调试版本"
 	@echo "  make info    - 显示项目信息"
 

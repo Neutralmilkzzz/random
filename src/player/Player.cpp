@@ -25,10 +25,23 @@ const int kHealCastFrames = 42;
 const int kUpWaveCastFrames = 18;
 const int kDownSlamCastFrames = 16;
 const int kMeleeVisualFrames = 6;
+const int kDeathFreezeFrames = 6;
+const int kDeathDotFrames = 4;
+const int kDeathExpandFrames = 24;
+const int kDeathFullWhiteFrames = 10;
+const int kDeathTextFrames = 60;
 const int kSoulMeterMax = 99;
 const int kSoulGainOnBasicHit = 11;
 const int kSoulSkillCost = 33;
 const int kPlayerAttackDamage = 1;
+
+int deathAnimationTotalFrames() {
+    return kDeathFreezeFrames +
+           kDeathDotFrames +
+           kDeathExpandFrames +
+           kDeathFullWhiteFrames +
+           kDeathTextFrames;
+}
 
 size_t lineWidth(const std::string& map) {
     const size_t newlinePos = map.find('\n');
@@ -97,7 +110,8 @@ Player::Player(KeyStateManager& keyStateManager)
       framesSinceLastDamage(kHealLockoutFrames),
       blinkFramesRemaining(0),
       lastAction("Ready"),
-      lastResult("Main player combat kit integrated.") {
+      lastResult("Main player combat kit integrated."),
+      resetQueued(false) {
     resetRuntimeState();
 }
 
@@ -122,11 +136,13 @@ void Player::resetRuntimeState() {
     downSlamCast.totalFrames = kDownSlamCastFrames;
     meleeVisual = MeleeVisualState();
     meleeVisual.totalFrames = kMeleeVisualFrames;
+    deathAnimation = DeathAnimationState();
     rewardPopup = RewardPopupState();
     projectiles.clear();
     previousKeys.clear();
     lastAction = "Ready";
-    lastResult = "Move with A/D, jump with SPACE, attack with J/I/K, cast with L/O/M, heal with R.";
+    lastResult = "Move with A/D, jump with SPACE, aim with W/S, attack with J, cast with K, heal with R.";
+    resetQueued = false;
 }
 
 bool Player::isGrounded(const std::string& currentmap, size_t pos) {
@@ -328,12 +344,24 @@ void Player::move(std::string& currentmap) {
     jumpHeldLastFrame = jumpHeld;
 }
 
-void Player::updateCombat(const std::string& gameplayMap, game::GroundEnemy& groundEnemy) {
+void Player::updateCombat(const std::string& gameplayMap,
+                          game::GroundEnemy& groundEnemy,
+                          game::FlyingEnemy& flyingEnemy) {
+    if (deathAnimation.active) {
+        updateDeathAnimation();
+        previousKeys = ksm.keyStates;
+        return;
+    }
+
     updateBlink();
     updateRewardPopup();
     updateFacingFromInput();
 
     if (!isAlive()) {
+        const game::Position playerPosition = findGlyphPosition(gameplayMap, '@');
+        if (playerPosition.x >= 0 && playerPosition.y >= 0) {
+            triggerDeathAnimation(playerPosition, "Unknown source");
+        }
         previousKeys = ksm.keyStates;
         return;
     }
@@ -344,66 +372,80 @@ void Player::updateCombat(const std::string& gameplayMap, game::GroundEnemy& gro
         return;
     }
 
-    if (!isMovementLocked() && (isJustPressed('j') || isJustPressed('J'))) {
-        startMeleeVisual(MeleeVisualType::Horizontal, playerPosition);
-        lastAction = "Basic Attack";
-        if (applyDamageToEnemyInMeleeRange(
-                groundEnemy,
-                playerPosition,
-                game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true))) {
-            stats.soul.current = std::min(stats.soul.maximum, stats.soul.current + kSoulGainOnBasicHit);
-            lastResult = "Slash connected. Soul +11.";
+    const bool aimingUp = isKeyDown('w') || isKeyDown('W');
+    const bool aimingDown = isKeyDown('s') || isKeyDown('S');
+    const bool physicalPressed = isJustPressed('j') || isJustPressed('J');
+    const bool spellPressed = isJustPressed('k') || isJustPressed('K');
+
+    if (!isMovementLocked() && physicalPressed) {
+        if (aimingUp) {
+            startMeleeVisual(MeleeVisualType::Up, playerPosition);
+            lastAction = "Up Slash";
+            if (applyDamageToEnemyInMeleeRange(
+                        groundEnemy,
+                        playerPosition,
+                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true)) ||
+                applyDamageToEnemyInMeleeRange(
+                        flyingEnemy,
+                        playerPosition,
+                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true))) {
+                lastResult = "Up slash connected.";
+            } else {
+                lastResult = "Slash triggered. No target in range.";
+            }
+        } else if (aimingDown) {
+            startMeleeVisual(MeleeVisualType::Down, playerPosition);
+            lastAction = "Down Slash";
+            if (applyDamageToEnemyInMeleeRange(
+                        groundEnemy,
+                        playerPosition,
+                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true)) ||
+                applyDamageToEnemyInMeleeRange(
+                        flyingEnemy,
+                        playerPosition,
+                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true))) {
+                lastResult = "Down slash connected.";
+            } else {
+                lastResult = "Slash triggered. No target in range.";
+            }
         } else {
-            lastResult = "No target in range.";
+            startMeleeVisual(MeleeVisualType::Horizontal, playerPosition);
+            lastAction = "Basic Attack";
+            const bool groundHit = applyDamageToEnemyInMeleeRange(
+                    groundEnemy,
+                    playerPosition,
+                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
+            const bool flyingHit = applyDamageToEnemyInMeleeRange(
+                    flyingEnemy,
+                    playerPosition,
+                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
+            if (groundHit || flyingHit) {
+                stats.soul.current = std::min(stats.soul.maximum, stats.soul.current + kSoulGainOnBasicHit);
+                lastResult = "Slash connected. Soul +11.";
+            } else {
+                lastResult = "No target in range.";
+            }
         }
     }
 
-    if (!isMovementLocked() && (isJustPressed('i') || isJustPressed('I'))) {
-        startMeleeVisual(MeleeVisualType::Up, playerPosition);
-        lastAction = "Up Slash";
-        if (applyDamageToEnemyInMeleeRange(
-                groundEnemy,
-                playerPosition,
-                game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true))) {
-            lastResult = "Up slash connected.";
+    if (!isMovementLocked() && spellPressed) {
+        if (aimingUp) {
+            castUpWave(playerPosition);
+        } else if (aimingDown) {
+            castDownSlam(gameplayMap, playerPosition);
         } else {
-            lastResult = "Slash triggered. No target in range.";
+            castHorizontalWave(playerPosition);
         }
-    }
-
-    if (!isMovementLocked() && (isJustPressed('k') || isJustPressed('K'))) {
-        startMeleeVisual(MeleeVisualType::Down, playerPosition);
-        lastAction = "Down Slash";
-        if (applyDamageToEnemyInMeleeRange(
-                groundEnemy,
-                playerPosition,
-                game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true))) {
-            lastResult = "Down slash connected.";
-        } else {
-            lastResult = "Slash triggered. No target in range.";
-        }
-    }
-
-    if (!isMovementLocked() && (isJustPressed('l') || isJustPressed('L'))) {
-        castHorizontalWave(playerPosition);
-    }
-
-    if (!isMovementLocked() && (isJustPressed('o') || isJustPressed('O'))) {
-        castUpWave(playerPosition);
-    }
-
-    if (!isMovementLocked() && (isJustPressed('m') || isJustPressed('M'))) {
-        castDownSlam(gameplayMap, playerPosition);
     }
 
     if (!isMovementLocked() && (isJustPressed('r') || isJustPressed('R'))) {
         startHealCast();
     }
 
-    updateDownSlamCast(gameplayMap, groundEnemy);
-    updateUpWaveCast(gameplayMap, groundEnemy);
+    updateDownSlamCast(gameplayMap, groundEnemy, flyingEnemy);
+    updateUpWaveCast(gameplayMap, groundEnemy, flyingEnemy);
     updateMeleeVisual();
-    updateProjectiles(gameplayMap, groundEnemy);
+    updateProjectiles(gameplayMap, groundEnemy, flyingEnemy);
     updateHealCast();
 
     stats.soul.maximum = kSoulMeterMax;
@@ -414,8 +456,8 @@ void Player::updateCombat(const std::string& gameplayMap, game::GroundEnemy& gro
     previousKeys = ksm.keyStates;
 }
 
-void Player::receiveDamage(const std::string& sourceLabel) {
-    if (blinkFramesRemaining > 0 || stats.health.current <= 0) {
+void Player::receiveDamage(const std::string& sourceLabel, const game::Position& playerPosition) {
+    if (blinkFramesRemaining > 0 || stats.health.current <= 0 || deathAnimation.active) {
         return;
     }
 
@@ -427,7 +469,8 @@ void Player::receiveDamage(const std::string& sourceLabel) {
     lastAction = "Damaged";
 
     if (stats.health.current == 0) {
-        lastResult = sourceLabel + " defeated the player. Press R to reset.";
+        lastResult = sourceLabel + " defeated the player.";
+        triggerDeathAnimation(playerPosition, sourceLabel);
     } else {
         lastResult = sourceLabel + " dealt 1 damage.";
     }
@@ -443,6 +486,15 @@ bool Player::isVisible() const {
 
 bool Player::isAlive() const {
     return stats.health.current > 0;
+}
+
+bool Player::consumeResetRequest() {
+    if (!resetQueued) {
+        return false;
+    }
+
+    resetQueued = false;
+    return true;
 }
 
 const game::CharacterStats& Player::getStats() const {
@@ -461,7 +513,7 @@ std::string Player::buildHud() const {
     }
     hud << buildHealthOrbLine() << "\n";
     hud << "[Main] ESC exit | P reset room\n";
-    hud << "Move A/D  Jump SPACE  Basic J  Up I  Down K  Wave L  UpWave O  Slam M  Heal R\n";
+    hud << "Move A/D  Look W/S  Jump SPACE  Attack J  Spell K  W+J UpSlash  S+J DownSlash  W+K UpWave  S+K Slam  Heal R\n";
     hud << "Facing " << (facing == game::FacingDirection::Right ? "Right" : "Left")
         << " | Heal Ready " << (framesSinceLastDamage >= kHealLockoutFrames ? "YES" : "NO")
         << " | HKD " << stats.hkd << "\n";
@@ -472,11 +524,7 @@ std::string Player::buildHud() const {
 
 void Player::overlayRender(std::string& renderMap, const std::string& gameplayMap) const {
     const game::Position playerPosition = findGlyphPosition(gameplayMap, '@');
-    if (playerPosition.x < 0 || playerPosition.y < 0) {
-        return;
-    }
-
-    if (healCast.active) {
+    if (playerPosition.x >= 0 && playerPosition.y >= 0 && healCast.active) {
         const int stage = (healCast.elapsedFrames / 6) % 4;
         if (stage == 0) {
             placeGlyph(renderMap, game::Position(playerPosition.x - 1, playerPosition.y), '.');
@@ -494,7 +542,7 @@ void Player::overlayRender(std::string& renderMap, const std::string& gameplayMa
         }
     }
 
-    if (meleeVisual.active) {
+    if (playerPosition.x >= 0 && playerPosition.y >= 0 && meleeVisual.active) {
         const std::vector<SpellVisualCell> cells = buildMeleeVisualCells();
         for (size_t index = 0; index < cells.size(); ++index) {
             const game::Position target(meleeVisual.origin.x + cells[index].dx,
@@ -506,7 +554,7 @@ void Player::overlayRender(std::string& renderMap, const std::string& gameplayMa
         }
     }
 
-    if (upWaveCast.active) {
+    if (playerPosition.x >= 0 && playerPosition.y >= 0 && upWaveCast.active) {
         const std::vector<SpellVisualCell> cells = buildUpWaveVisualCells();
         for (size_t index = 0; index < cells.size(); ++index) {
             const game::Position target(upWaveCast.origin.x + cells[index].dx,
@@ -518,7 +566,7 @@ void Player::overlayRender(std::string& renderMap, const std::string& gameplayMa
         }
     }
 
-    if (downSlamCast.active) {
+    if (playerPosition.x >= 0 && playerPosition.y >= 0 && downSlamCast.active) {
         const std::vector<SpellVisualCell> cells = buildDownSlamVisualCells();
         for (size_t index = 0; index < cells.size(); ++index) {
             const game::Position target(downSlamCast.origin.x + cells[index].dx,
@@ -542,13 +590,15 @@ void Player::overlayRender(std::string& renderMap, const std::string& gameplayMa
         }
     }
 
-    if (isVisible()) {
-        placeGlyph(renderMap, playerPosition, '@');
-    } else {
-        placeGlyph(renderMap, playerPosition, ' ');
+    if (playerPosition.x >= 0 && playerPosition.y >= 0) {
+        if (isVisible()) {
+            placeGlyph(renderMap, playerPosition, '@');
+        } else {
+            placeGlyph(renderMap, playerPosition, ' ');
+        }
     }
 
-    if (rewardPopup.active) {
+    if (playerPosition.x >= 0 && playerPosition.y >= 0 && rewardPopup.active) {
         const int riseOffset = rewardPopup.elapsedFrames / 8;
         const std::string amountText = "+" + std::to_string(rewardPopup.amount);
         const game::Position popupPosition(
@@ -556,6 +606,8 @@ void Player::overlayRender(std::string& renderMap, const std::string& gameplayMa
                 playerPosition.y - 2 - riseOffset);
         placeText(renderMap, popupPosition, amountText);
     }
+
+    applyDeathAnimationOverlay(renderMap);
 }
 
 bool Player::isKeyDown(int keyCode) const {
@@ -590,6 +642,10 @@ void Player::updateFacingFromInput() {
 }
 
 void Player::updateBlink() {
+    if (deathAnimation.active) {
+        return;
+    }
+
     if (framesSinceLastDamage < kHealLockoutFrames) {
         framesSinceLastDamage++;
     }
@@ -601,6 +657,32 @@ void Player::updateBlink() {
     if (blinkFramesRemaining <= 0) {
         blinkFramesRemaining = 0;
         hitFeedback.blinking = false;
+    }
+}
+
+void Player::updateDeathAnimation() {
+    if (!deathAnimation.active || resetQueued) {
+        return;
+    }
+
+    deathAnimation.elapsedFrames++;
+    if (deathAnimation.elapsedFrames >= deathAnimationTotalFrames()) {
+        deathAnimation.elapsedFrames = deathAnimationTotalFrames() - 1;
+        resetQueued = true;
+        lastAction = "YOU DEAD";
+        lastResult = "The room will reset.";
+    } else if (deathAnimation.elapsedFrames >= kDeathFreezeFrames + kDeathDotFrames + kDeathExpandFrames + kDeathFullWhiteFrames) {
+        lastAction = "YOU DEAD";
+        lastResult = "The white screen holds for a moment.";
+    } else if (deathAnimation.elapsedFrames >= kDeathFreezeFrames + kDeathDotFrames + kDeathExpandFrames) {
+        lastAction = "Death Bloom";
+        lastResult = "The screen is swallowed by white.";
+    } else if (deathAnimation.elapsedFrames >= kDeathFreezeFrames + kDeathDotFrames) {
+        lastAction = "Death Bloom";
+        lastResult = "White rings expand from the shell.";
+    } else if (deathAnimation.elapsedFrames >= kDeathFreezeFrames) {
+        lastAction = "Death Bloom";
+        lastResult = "A white point remains.";
     }
 }
 
@@ -635,7 +717,9 @@ void Player::updateHealCast() {
     lastResult = "Channeling soul heal...";
 }
 
-void Player::updateUpWaveCast(const std::string& gameplayMap, game::GroundEnemy& groundEnemy) {
+void Player::updateUpWaveCast(const std::string& gameplayMap,
+                              game::GroundEnemy& groundEnemy,
+                              game::FlyingEnemy& flyingEnemy) {
     if (!upWaveCast.active) {
         return;
     }
@@ -646,10 +730,15 @@ void Player::updateUpWaveCast(const std::string& gameplayMap, game::GroundEnemy&
     if (!upWaveCast.damageResolved && stage >= 3) {
         const std::vector<game::Position> damageCells = buildUpWaveDamageCells(gameplayMap, stage >= 4);
         for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
-            if (applyDamageToEnemyAtPosition(
+            const bool hitGround = applyDamageToEnemyAtPosition(
                     groundEnemy,
                     damageCells[cellIndex],
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulWaveUp, "player", true))) {
+                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulWaveUp, "player", true));
+            const bool hitFlying = applyDamageToEnemyAtPosition(
+                    flyingEnemy,
+                    damageCells[cellIndex],
+                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulWaveUp, "player", true));
+            if (hitGround || hitFlying) {
                 lastAction = "Up Soul Wave";
                 lastResult = "Soul crown connected.";
                 break;
@@ -675,7 +764,9 @@ void Player::updateUpWaveCast(const std::string& gameplayMap, game::GroundEnemy&
     }
 }
 
-void Player::updateDownSlamCast(const std::string& gameplayMap, game::GroundEnemy& groundEnemy) {
+void Player::updateDownSlamCast(const std::string& gameplayMap,
+                                game::GroundEnemy& groundEnemy,
+                                game::FlyingEnemy& flyingEnemy) {
     if (!downSlamCast.active) {
         return;
     }
@@ -688,6 +779,10 @@ void Player::updateDownSlamCast(const std::string& gameplayMap, game::GroundEnem
         for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
             applyDamageToEnemyAtPosition(
                     groundEnemy,
+                    damageCells[cellIndex],
+                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulSlam, "player", true));
+            applyDamageToEnemyAtPosition(
+                    flyingEnemy,
                     damageCells[cellIndex],
                     game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulSlam, "player", true));
         }
@@ -724,7 +819,9 @@ void Player::updateMeleeVisual() {
     }
 }
 
-void Player::updateProjectiles(const std::string& gameplayMap, game::GroundEnemy& groundEnemy) {
+void Player::updateProjectiles(const std::string& gameplayMap,
+                               game::GroundEnemy& groundEnemy,
+                               game::FlyingEnemy& flyingEnemy) {
     std::vector<VisualProjectile> activeProjectiles;
 
     for (size_t index = 0; index < projectiles.size(); ++index) {
@@ -749,9 +846,13 @@ void Player::updateProjectiles(const std::string& gameplayMap, game::GroundEnemy
                 ? game::DamageType::SoulWaveUp
                 : game::DamageType::SoulWaveHorizontal;
         if (applyDamageToEnemyAtPosition(
-                groundEnemy,
-                projectile.position,
-                game::DamageInfo(kPlayerAttackDamage, damageType, "player", true))) {
+                    groundEnemy,
+                    projectile.position,
+                    game::DamageInfo(kPlayerAttackDamage, damageType, "player", true)) ||
+            applyDamageToEnemyAtPosition(
+                    flyingEnemy,
+                    projectile.position,
+                    game::DamageInfo(kPlayerAttackDamage, damageType, "player", true))) {
             lastAction = projectile.label;
             lastResult = "Projectile hit the target.";
             continue;
@@ -859,6 +960,34 @@ void Player::startMeleeVisual(MeleeVisualType type, const game::Position& origin
     meleeVisual.facing = facing;
 }
 
+void Player::triggerDeathAnimation(const game::Position& center, const std::string& sourceLabel) {
+    if (deathAnimation.active) {
+        return;
+    }
+
+    deathAnimation.active = true;
+    deathAnimation.elapsedFrames = 0;
+    deathAnimation.center = center;
+    projectiles.clear();
+    healCast.active = false;
+    upWaveCast.active = false;
+    downSlamCast.active = false;
+    meleeVisual.active = false;
+    rewardPopup.active = false;
+    blinkFramesRemaining = 0;
+    hitFeedback.blinking = false;
+    isJumping = false;
+    horizontalMoveAccumulator = 0.0f;
+    verticalMoveAccumulator = 0.0f;
+    upwardVelocity = 0.0f;
+    downwardVelocity = 0.0f;
+    jumpHoldRemaining = 0.0f;
+    minimumJumpRiseRemaining = 0.0f;
+    riseVelocityDropAccumulator = 0.0f;
+    lastAction = "Death";
+    lastResult = sourceLabel + " defeated the player.";
+}
+
 int Player::upWaveStage() const {
     if (!upWaveCast.active || upWaveCast.totalFrames <= 0) {
         return -1;
@@ -904,6 +1033,28 @@ int Player::meleeVisualStage() const {
     return stage;
 }
 
+int Player::deathExpansionRadius() const {
+    if (!deathAnimation.active) {
+        return -1;
+    }
+
+    const int expandElapsed = deathAnimation.elapsedFrames - (kDeathFreezeFrames + kDeathDotFrames);
+    if (expandElapsed < 0) {
+        return 0;
+    }
+
+    static const int radii[] = {1, 2, 4, 6, 9, 13};
+    const int stageCount = static_cast<int>(sizeof(radii) / sizeof(radii[0]));
+    int stage = (expandElapsed * stageCount) / kDeathExpandFrames;
+    if (stage < 0) {
+        stage = 0;
+    }
+    if (stage >= stageCount) {
+        stage = stageCount - 1;
+    }
+    return radii[stage];
+}
+
 bool Player::isEnemyInMeleeRange(const game::Position& playerPosition,
                                  const game::Position& enemyPosition) const {
     const int deltaX = enemyPosition.x - playerPosition.x;
@@ -920,19 +1071,19 @@ bool Player::isEnemyInMeleeRange(const game::Position& playerPosition,
     return deltaX <= -1 && deltaX >= -kAttackRange;
 }
 
-bool Player::applyDamageToEnemyAtPosition(game::GroundEnemy& groundEnemy,
+bool Player::applyDamageToEnemyAtPosition(game::Enemy& enemy,
                                           const game::Position& targetPosition,
                                           const game::DamageInfo& damageInfo) {
-    if (!groundEnemy.isAlive()) {
+    if (!enemy.isAlive()) {
         return false;
     }
 
-    const game::Position enemyPosition = groundEnemy.getPosition();
+    const game::Position enemyPosition = enemy.getPosition();
     if (enemyPosition.x == targetPosition.x && enemyPosition.y == targetPosition.y) {
-        const bool wasAlive = groundEnemy.isAlive();
-        groundEnemy.takeDamage(damageInfo);
-        if (wasAlive && !groundEnemy.isAlive()) {
-            grantKillReward(groundEnemy.getHkdReward());
+        const bool wasAlive = enemy.isAlive();
+        enemy.takeDamage(damageInfo);
+        if (wasAlive && !enemy.isAlive()) {
+            grantKillReward(enemy.getHkdReward());
         }
         return true;
     }
@@ -940,21 +1091,21 @@ bool Player::applyDamageToEnemyAtPosition(game::GroundEnemy& groundEnemy,
     return false;
 }
 
-bool Player::applyDamageToEnemyInMeleeRange(game::GroundEnemy& groundEnemy,
+bool Player::applyDamageToEnemyInMeleeRange(game::Enemy& enemy,
                                             const game::Position& playerPosition,
                                             const game::DamageInfo& damageInfo) {
-    if (!groundEnemy.isAlive()) {
+    if (!enemy.isAlive()) {
         return false;
     }
 
-    if (!isEnemyInMeleeRange(playerPosition, groundEnemy.getPosition())) {
+    if (!isEnemyInMeleeRange(playerPosition, enemy.getPosition())) {
         return false;
     }
 
-    const bool wasAlive = groundEnemy.isAlive();
-    groundEnemy.takeDamage(damageInfo);
-    if (wasAlive && !groundEnemy.isAlive()) {
-        grantKillReward(groundEnemy.getHkdReward());
+    const bool wasAlive = enemy.isAlive();
+    enemy.takeDamage(damageInfo);
+    if (wasAlive && !enemy.isAlive()) {
+        grantKillReward(enemy.getHkdReward());
     }
     return true;
 }
@@ -1299,4 +1450,67 @@ std::string Player::buildHealthOrbLine() const {
         }
     }
     return line.str();
+}
+
+void Player::applyDeathAnimationOverlay(std::string& renderMap) const {
+    if (!deathAnimation.active) {
+        return;
+    }
+
+    const size_t widthWithNewline = lineWidth(renderMap);
+    if (widthWithNewline == 0) {
+        return;
+    }
+
+    const int mapWidth = static_cast<int>(widthWithNewline - 1);
+    const int mapHeight = static_cast<int>((renderMap.length() + 1) / widthWithNewline);
+    const int fullWhiteStart = kDeathFreezeFrames + kDeathDotFrames + kDeathExpandFrames;
+    const int textStart = fullWhiteStart + kDeathFullWhiteFrames;
+
+    if (deathAnimation.elapsedFrames >= fullWhiteStart) {
+        for (size_t index = 0; index < renderMap.length(); ++index) {
+            if (renderMap[index] != '\n') {
+                renderMap[index] = '@';
+            }
+        }
+    } else if (deathAnimation.elapsedFrames >= kDeathFreezeFrames + kDeathDotFrames) {
+        const int radius = deathExpansionRadius();
+        const int innerRadius = std::max(0, radius - 2);
+        const int midRadius = std::max(0, radius - 4);
+        const int coreRadius = std::max(0, radius - 6);
+
+        for (int y = 0; y < mapHeight; ++y) {
+            for (int x = 0; x < mapWidth; ++x) {
+                const int dx = x - deathAnimation.center.x;
+                const int dy = y - deathAnimation.center.y;
+                const int distanceSq = dx * dx + dy * dy;
+
+                char glyph = '\0';
+                if (distanceSq <= coreRadius * coreRadius) {
+                    glyph = '@';
+                } else if (distanceSq <= midRadius * midRadius) {
+                    glyph = 'O';
+                } else if (distanceSq <= innerRadius * innerRadius) {
+                    glyph = 'o';
+                } else if (distanceSq <= radius * radius) {
+                    glyph = '.';
+                }
+
+                if (glyph != '\0') {
+                    placeGlyph(renderMap, game::Position(x, y), glyph);
+                }
+            }
+        }
+    } else if (deathAnimation.elapsedFrames >= kDeathFreezeFrames) {
+        placeGlyph(renderMap, deathAnimation.center, 'o');
+    }
+
+    if (deathAnimation.elapsedFrames >= textStart) {
+        const std::string text = "YOU DEAD";
+        const int textX = std::max(0, (mapWidth - static_cast<int>(text.length())) / 2);
+        const int textY = std::max(0, mapHeight / 2);
+        for (size_t index = 0; index < text.length(); ++index) {
+            placeGlyph(renderMap, game::Position(textX + static_cast<int>(index), textY), text[index]);
+        }
+    }
 }

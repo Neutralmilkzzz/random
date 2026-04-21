@@ -1196,6 +1196,135 @@ void updateEffects(SandboxState& state) {
     state.effects.swap(activeEffects);
 }
 
+void triggerDeathAnimation(SandboxState& state, const game::Position& center) {
+    if (state.deathAnimation.active) {
+        return;
+    }
+
+    state.deathAnimation.active = true;
+    state.deathAnimation.elapsedFrames = 0;
+    state.deathAnimation.center = center;
+    state.projectiles.clear();
+    state.effects.clear();
+    state.healCast.active = false;
+    state.upWaveCast.active = false;
+    state.downSlamCast.active = false;
+    state.meleeVisual.active = false;
+    state.lastAction = "Instant Death";
+    state.lastResult = "Death animation triggered. World frozen.";
+}
+
+bool updateDeathAnimation(SandboxState& state) {
+    if (!state.deathAnimation.active) {
+        return false;
+    }
+
+    state.deathAnimation.elapsedFrames++;
+    if (state.deathAnimation.elapsedFrames >= deathAnimationTotalFrames()) {
+        state.deathAnimation = DeathAnimationState();
+        return true;
+    }
+
+    return false;
+}
+
+int deathExpansionRadius(const SandboxState& state) {
+    if (!state.deathAnimation.active) {
+        return -1;
+    }
+
+    const int expandElapsed = state.deathAnimation.elapsedFrames - (kDeathFreezeFrames + kDeathDotFrames);
+    if (expandElapsed < 0) {
+        return 0;
+    }
+
+    static const int radii[] = {1, 2, 4, 6, 9, 13};
+    const int stageCount = static_cast<int>(sizeof(radii) / sizeof(radii[0]));
+    int stage = (expandElapsed * stageCount) / kDeathExpandFrames;
+    if (stage < 0) {
+        stage = 0;
+    }
+    if (stage >= stageCount) {
+        stage = stageCount - 1;
+    }
+    return radii[stage];
+}
+
+void applyDeathAnimationOverlay(std::string& renderMap, const SandboxState& state) {
+    if (!state.deathAnimation.active) {
+        return;
+    }
+
+    const size_t widthWithNewline = lineWidth(renderMap);
+    if (widthWithNewline == 0) {
+        return;
+    }
+
+    const int mapWidth = static_cast<int>(widthWithNewline - 1);
+    const int mapHeight = static_cast<int>((renderMap.length() + 1) / widthWithNewline);
+    const int fullWhiteStart = kDeathFreezeFrames + kDeathDotFrames + kDeathExpandFrames;
+    const int textStart = fullWhiteStart + kDeathFullWhiteFrames;
+
+    if (state.deathAnimation.elapsedFrames >= fullWhiteStart) {
+        for (size_t index = 0; index < renderMap.length(); ++index) {
+            if (renderMap[index] != '\n') {
+                renderMap[index] = '@';
+            }
+        }
+    } else if (state.deathAnimation.elapsedFrames >= kDeathFreezeFrames + kDeathDotFrames) {
+        const int radius = deathExpansionRadius(state);
+        const int innerRadius = std::max(0, radius - 2);
+        const int midRadius = std::max(0, radius - 4);
+        const int coreRadius = std::max(0, radius - 6);
+
+        for (int y = 0; y < mapHeight; ++y) {
+            for (int x = 0; x < mapWidth; ++x) {
+                const int dx = x - state.deathAnimation.center.x;
+                const int dy = y - state.deathAnimation.center.y;
+                const int distanceSq = dx * dx + dy * dy;
+
+                char glyph = '\0';
+                if (distanceSq <= coreRadius * coreRadius) {
+                    glyph = '@';
+                } else if (distanceSq <= midRadius * midRadius) {
+                    glyph = 'O';
+                } else if (distanceSq <= innerRadius * innerRadius) {
+                    glyph = 'o';
+                } else if (distanceSq <= radius * radius) {
+                    glyph = '.';
+                }
+
+                if (glyph != '\0') {
+                    placeGlyph(renderMap, game::Position(x, y), glyph);
+                }
+            }
+        }
+    } else if (state.deathAnimation.elapsedFrames >= kDeathFreezeFrames) {
+        placeGlyph(renderMap, state.deathAnimation.center, 'o');
+    }
+
+    if (state.deathAnimation.elapsedFrames >= textStart) {
+        const std::string text = "YOU DEAD";
+        const int textX = std::max(0, (mapWidth - static_cast<int>(text.length())) / 2);
+        const int textY = std::max(0, mapHeight / 2);
+        for (size_t index = 0; index < text.length(); ++index) {
+            placeGlyph(renderMap, game::Position(textX + static_cast<int>(index), textY), text[index]);
+        }
+    }
+}
+
+void resetSandboxSession(SandboxState& state,
+                         std::string& gameplayMap,
+                         std::vector<SandboxEnemy>& groundEnemies,
+                         Player& player) {
+    const bool keepInfiniteSoul = state.infiniteSoulMode;
+    state = SandboxState();
+    state.infiniteSoulMode = keepInfiniteSoul;
+    gameplayMap = kArenaMap;
+    groundEnemies.clear();
+    player.resetRuntimeState();
+}
+
 std::vector<std::string> buildSoulVesselLines(const SandboxState& state) {
     const int totalFillUnits = 3;
     const int fillUnits = state.stats.soul.maximum == 0
@@ -1264,7 +1393,7 @@ std::string buildHud(const SandboxState& state, int activeGroundEnemies) {
     hud << "HP Debug " << state.stats.health.current << "/" << state.stats.health.maximum
         << " | Soul Debug " << state.stats.soul.current << "/" << state.stats.soul.maximum << "\n";
     hud << "[HeroSandbox] ESC exit | P infinite soul (" << (state.infiniteSoulMode ? "ON" : "OFF") << ")\n";
-    hud << "Move A/D  Jump SPACE  Basic J  Up I  Down K  Wave L  UpWave O  Slam M  Heal R  SelfDamage H\n";
+    hud << "Move A/D  Look W/S  Jump SPACE  Attack J  Spell K  W+J UpSlash  S+J DownSlash  W+K UpWave  S+K Slam  Heal R  SelfDamage H  Death X\n";
     hud << "Spawn Ground Enemy: 1 | Spawn Pair: 2 | Clear Enemies: C\n";
     hud << "Facing " << (state.facing == game::FacingDirection::Right ? "Right" : "Left")
         << " | Heal Ready " << (state.framesSinceLastDamage >= kHealLockoutFrames ? "YES" : "NO") << "\n";
@@ -1406,6 +1535,8 @@ std::string buildRenderMap(const std::string& gameplayMap,
         }
     }
 
+    applyDeathAnimationOverlay(renderMap, state);
+
     return renderMap;
 }
 
@@ -1427,175 +1558,186 @@ int main() {
             break;
         }
 
-        const bool playerLockedByCast = state.healCast.active || state.downSlamCast.active;
-        if (!playerLockedByCast) {
-            if (isKeyDown(keyStateManager, 'a') || isKeyDown(keyStateManager, 'A')) {
-                state.facing = game::FacingDirection::Left;
-            } else if (isKeyDown(keyStateManager, 'd') || isKeyDown(keyStateManager, 'D')) {
-                state.facing = game::FacingDirection::Right;
-            }
+        const bool triggerInstantDeath = !state.deathAnimation.active &&
+                                         (isJustPressed(keyStateManager, state, 'x') || isJustPressed(keyStateManager, state, 'X'));
 
-            std::string collisionMap = buildCollisionMap(gameplayMap, groundEnemies);
-            const game::Position previousPlayerPosition = findGlyphPosition(gameplayMap, '@');
-            player.move(collisionMap);
-            const game::Position movedPlayerPosition = findGlyphPosition(collisionMap, '@');
-
-            if (previousPlayerPosition.x >= 0 && previousPlayerPosition.y >= 0) {
-                placeGlyph(gameplayMap, previousPlayerPosition, ' ');
+        if (triggerInstantDeath) {
+            triggerDeathAnimation(state, findGlyphPosition(gameplayMap, '@'));
+        } else if (state.deathAnimation.active) {
+            if (updateDeathAnimation(state)) {
+                resetSandboxSession(state, gameplayMap, groundEnemies, player);
             }
-            if (movedPlayerPosition.x >= 0 && movedPlayerPosition.y >= 0) {
-                placeGlyph(gameplayMap, movedPlayerPosition, '@');
-            }
-        }
-
-        if (state.framesSinceLastDamage < kHealLockoutFrames) {
-            state.framesSinceLastDamage++;
-        }
-        if (state.blinkFramesRemaining > 0) {
-            state.blinkFramesRemaining--;
         } else {
-            state.hitFeedback.blinking = false;
-        }
+            const bool playerLockedByCast = state.healCast.active || state.downSlamCast.active;
+            if (!playerLockedByCast) {
+                if (isKeyDown(keyStateManager, 'a') || isKeyDown(keyStateManager, 'A')) {
+                    state.facing = game::FacingDirection::Left;
+                } else if (isKeyDown(keyStateManager, 'd') || isKeyDown(keyStateManager, 'D')) {
+                    state.facing = game::FacingDirection::Right;
+                }
 
-        const game::Position playerPosition = findGlyphPosition(gameplayMap, '@');
-        const game::Position dummyPosition = findGlyphPosition(gameplayMap, 'T');
-        const bool dummyInMeleeRange = isDummyInMeleeRange(playerPosition, dummyPosition, state.facing);
+                std::string collisionMap = buildCollisionMap(gameplayMap, groundEnemies);
+                const game::Position previousPlayerPosition = findGlyphPosition(gameplayMap, '@');
+                player.move(collisionMap);
+                const game::Position movedPlayerPosition = findGlyphPosition(collisionMap, '@');
 
-        if (!playerLockedByCast && isJustPressed(keyStateManager, state, '1')) {
-            const game::Position spawnPoint = kGroundEnemySpawnPoints[state.groundEnemySpawns % kGroundEnemySpawnPoints.size()];
-            state.lastAction = "Spawn Ground Enemy";
-            if (spawnGroundEnemy(groundEnemies, state, gameplayMap, playerPosition, spawnPoint)) {
-                state.lastResult = "Spawned 1 ground enemy.";
-            } else {
-                state.lastResult = "Spawn point blocked.";
-            }
-        }
-
-        if (!playerLockedByCast && isJustPressed(keyStateManager, state, '2')) {
-            int spawned = 0;
-            for (size_t index = 0; index < kGroundEnemySpawnPoints.size() && spawned < 2; ++index) {
-                if (spawnGroundEnemy(groundEnemies, state, gameplayMap, playerPosition, kGroundEnemySpawnPoints[index])) {
-                    spawned++;
+                if (previousPlayerPosition.x >= 0 && previousPlayerPosition.y >= 0) {
+                    placeGlyph(gameplayMap, previousPlayerPosition, ' ');
+                }
+                if (movedPlayerPosition.x >= 0 && movedPlayerPosition.y >= 0) {
+                    placeGlyph(gameplayMap, movedPlayerPosition, '@');
                 }
             }
 
-            state.lastAction = "Spawn Ground Enemy Pair";
-            if (spawned > 0) {
-                state.lastResult = "Spawned " + std::to_string(spawned) + " ground enemies.";
-            } else {
-                state.lastResult = "All spawn points are blocked.";
+            if (state.framesSinceLastDamage < kHealLockoutFrames) {
+                state.framesSinceLastDamage++;
             }
-        }
+            if (state.blinkFramesRemaining > 0) {
+                state.blinkFramesRemaining--;
+            } else {
+                state.hitFeedback.blinking = false;
+            }
 
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'c') || isJustPressed(keyStateManager, state, 'C'))) {
-            groundEnemies.clear();
-            state.lastAction = "Clear Ground Enemies";
-            state.lastResult = "Cleared all spawned ground enemies.";
-        }
+            const game::Position playerPosition = findGlyphPosition(gameplayMap, '@');
+            const game::Position dummyPosition = findGlyphPosition(gameplayMap, 'T');
+            const bool dummyInMeleeRange = isDummyInMeleeRange(playerPosition, dummyPosition, state.facing);
+            const bool aimingUp = isKeyDown(keyStateManager, 'w') || isKeyDown(keyStateManager, 'W');
+            const bool aimingDown = isKeyDown(keyStateManager, 's') || isKeyDown(keyStateManager, 'S');
+            const bool physicalPressed = isJustPressed(keyStateManager, state, 'j') || isJustPressed(keyStateManager, state, 'J');
+            const bool spellPressed = isJustPressed(keyStateManager, state, 'k') || isJustPressed(keyStateManager, state, 'K');
 
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'p') || isJustPressed(keyStateManager, state, 'P'))) {
-            state.infiniteSoulMode = !state.infiniteSoulMode;
-            state.lastAction = "Toggle Infinite Soul";
-            state.lastResult = state.infiniteSoulMode ? "Infinite soul enabled." : "Infinite soul disabled.";
-        }
+            if (!playerLockedByCast && isJustPressed(keyStateManager, state, '1')) {
+                const game::Position spawnPoint = kGroundEnemySpawnPoints[state.groundEnemySpawns % kGroundEnemySpawnPoints.size()];
+                state.lastAction = "Spawn Ground Enemy";
+                if (spawnGroundEnemy(groundEnemies, state, gameplayMap, playerPosition, spawnPoint)) {
+                    state.lastResult = "Spawned 1 ground enemy.";
+                } else {
+                    state.lastResult = "Spawn point blocked.";
+                }
+            }
 
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'h') || isJustPressed(keyStateManager, state, 'H'))) {
-            applySelfDamage(state);
-        }
+            if (!playerLockedByCast && isJustPressed(keyStateManager, state, '2')) {
+                int spawned = 0;
+                for (size_t index = 0; index < kGroundEnemySpawnPoints.size() && spawned < 2; ++index) {
+                    if (spawnGroundEnemy(groundEnemies, state, gameplayMap, playerPosition, kGroundEnemySpawnPoints[index])) {
+                        spawned++;
+                    }
+                }
 
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'j') || isJustPressed(keyStateManager, state, 'J'))) {
-            startMeleeVisual(state, MeleeVisualType::Horizontal, playerPosition, state.facing);
-            const int defeatedBefore = state.defeatedGroundEnemies;
-            const int enemyHits = applyDamageToGroundEnemies(
-                    groundEnemies,
-                    playerPosition,
-                    state.facing,
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
+                state.lastAction = "Spawn Ground Enemy Pair";
+                if (spawned > 0) {
+                    state.lastResult = "Spawned " + std::to_string(spawned) + " ground enemies.";
+                } else {
+                    state.lastResult = "All spawn points are blocked.";
+                }
+            }
+
+            if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'c') || isJustPressed(keyStateManager, state, 'C'))) {
+                groundEnemies.clear();
+                state.lastAction = "Clear Ground Enemies";
+                state.lastResult = "Cleared all spawned ground enemies.";
+            }
+
+            if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'p') || isJustPressed(keyStateManager, state, 'P'))) {
+                state.infiniteSoulMode = !state.infiniteSoulMode;
+                state.lastAction = "Toggle Infinite Soul";
+                state.lastResult = state.infiniteSoulMode ? "Infinite soul enabled." : "Infinite soul disabled.";
+            }
+
+            if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'h') || isJustPressed(keyStateManager, state, 'H'))) {
+                applySelfDamage(state);
+            }
+
+            if (!playerLockedByCast && physicalPressed) {
+                if (aimingUp) {
+                    startMeleeVisual(state, MeleeVisualType::Up, playerPosition, state.facing);
+                    const int defeatedBefore = state.defeatedGroundEnemies;
+                    const int enemyHits = applyDamageToGroundEnemies(
+                            groundEnemies,
+                            playerPosition,
+                            state.facing,
+                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true));
+                    removeDefeatedGroundEnemies(groundEnemies, state);
+
+                    if (enemyHits > 0) {
+                        registerGroundEnemyHit(state, "Up Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
+                    } else if (dummyInMeleeRange) {
+                        registerDummyHit(state, "Up Slash", false, 0);
+                    } else {
+                        state.lastAction = "Up Slash";
+                        state.lastResult = "Slash triggered. No target in range.";
+                    }
+                } else if (aimingDown) {
+                    startMeleeVisual(state, MeleeVisualType::Down, playerPosition, state.facing);
+                    const int defeatedBefore = state.defeatedGroundEnemies;
+                    const int enemyHits = applyDamageToGroundEnemies(
+                            groundEnemies,
+                            playerPosition,
+                            state.facing,
+                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true));
+                    removeDefeatedGroundEnemies(groundEnemies, state);
+
+                    if (enemyHits > 0) {
+                        registerGroundEnemyHit(state, "Down Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
+                    } else if (dummyInMeleeRange) {
+                        registerDummyHit(state, "Down Slash", false, 0);
+                    } else {
+                        state.lastAction = "Down Slash";
+                        state.lastResult = "Slash triggered. No target in range.";
+                    }
+                } else {
+                    startMeleeVisual(state, MeleeVisualType::Horizontal, playerPosition, state.facing);
+                    const int defeatedBefore = state.defeatedGroundEnemies;
+                    const int enemyHits = applyDamageToGroundEnemies(
+                            groundEnemies,
+                            playerPosition,
+                            state.facing,
+                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
+                    removeDefeatedGroundEnemies(groundEnemies, state);
+                    const int defeatedThisHit = state.defeatedGroundEnemies - defeatedBefore;
+
+                    if (enemyHits > 0) {
+                        registerGroundEnemyHit(state, "Basic Attack", enemyHits, true, 11, defeatedThisHit);
+                    } else if (dummyInMeleeRange) {
+                        registerDummyHit(state, "Basic Attack", true, 11);
+                    } else {
+                        state.lastAction = "Basic Attack";
+                        state.lastResult = "No target in range.";
+                    }
+                }
+            }
+
+            if (!playerLockedByCast && spellPressed) {
+                if (aimingUp) {
+                    castUpWave(state, playerPosition);
+                } else if (aimingDown) {
+                    castDownSlam(state, gameplayMap, playerPosition, dummyPosition, groundEnemies);
+                } else {
+                    castHorizontalWave(state, playerPosition);
+                }
+            }
+
+            if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'r') || isJustPressed(keyStateManager, state, 'R'))) {
+                startHealCast(state);
+            }
+
+            updateDownSlamCast(state, gameplayMap, dummyPosition, groundEnemies);
+            updateUpWaveCast(state, gameplayMap, dummyPosition, groundEnemies);
+            updateMeleeVisual(state);
+            updateProjectiles(state, gameplayMap, dummyPosition, groundEnemies);
+            updateEffects(state);
+            updateHealCast(state);
+            updateGroundEnemies(groundEnemies, gameplayMap, playerPosition);
             removeDefeatedGroundEnemies(groundEnemies, state);
-            const int defeatedThisHit = state.defeatedGroundEnemies - defeatedBefore;
 
-            if (enemyHits > 0) {
-                registerGroundEnemyHit(state, "Basic Attack", enemyHits, true, 11, defeatedThisHit);
-            } else if (dummyInMeleeRange) {
-                registerDummyHit(state, "Basic Attack", true, 11);
-            } else {
-                state.lastAction = "Basic Attack";
-                state.lastResult = "No target in range.";
+            state.stats.soul.maximum = kSoulMeterMax;
+            if (!state.infiniteSoulMode && state.stats.soul.current > state.stats.soul.maximum) {
+                state.stats.soul.current = state.stats.soul.maximum;
             }
-        }
 
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'i') || isJustPressed(keyStateManager, state, 'I'))) {
-            startMeleeVisual(state, MeleeVisualType::Up, playerPosition, state.facing);
-            const int defeatedBefore = state.defeatedGroundEnemies;
-            const int enemyHits = applyDamageToGroundEnemies(
-                    groundEnemies,
-                    playerPosition,
-                    state.facing,
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true));
-            removeDefeatedGroundEnemies(groundEnemies, state);
-
-            if (enemyHits > 0) {
-                registerGroundEnemyHit(state, "Up Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
-            } else if (dummyInMeleeRange) {
-                registerDummyHit(state, "Up Slash", false, 0);
-            } else {
-                state.lastAction = "Up Slash";
-                state.lastResult = "Slash triggered. No target in range.";
+            if (state.infiniteSoulMode) {
+                state.stats.soul.current = state.stats.soul.maximum;
             }
-        }
-
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'k') || isJustPressed(keyStateManager, state, 'K'))) {
-            startMeleeVisual(state, MeleeVisualType::Down, playerPosition, state.facing);
-            const int defeatedBefore = state.defeatedGroundEnemies;
-            const int enemyHits = applyDamageToGroundEnemies(
-                    groundEnemies,
-                    playerPosition,
-                    state.facing,
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true));
-            removeDefeatedGroundEnemies(groundEnemies, state);
-
-            if (enemyHits > 0) {
-                registerGroundEnemyHit(state, "Down Slash", enemyHits, false, 0, state.defeatedGroundEnemies - defeatedBefore);
-            } else if (dummyInMeleeRange) {
-                registerDummyHit(state, "Down Slash", false, 0);
-            } else {
-                state.lastAction = "Down Slash";
-                state.lastResult = "Slash triggered. No target in range.";
-            }
-        }
-
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'l') || isJustPressed(keyStateManager, state, 'L'))) {
-            castHorizontalWave(state, playerPosition);
-        }
-
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'o') || isJustPressed(keyStateManager, state, 'O'))) {
-            castUpWave(state, playerPosition);
-        }
-
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'm') || isJustPressed(keyStateManager, state, 'M'))) {
-            castDownSlam(state, gameplayMap, playerPosition, dummyPosition, groundEnemies);
-        }
-
-        if (!playerLockedByCast && (isJustPressed(keyStateManager, state, 'r') || isJustPressed(keyStateManager, state, 'R'))) {
-            startHealCast(state);
-        }
-
-        updateDownSlamCast(state, gameplayMap, dummyPosition, groundEnemies);
-        updateUpWaveCast(state, gameplayMap, dummyPosition, groundEnemies);
-        updateMeleeVisual(state);
-        updateProjectiles(state, gameplayMap, dummyPosition, groundEnemies);
-        updateEffects(state);
-        updateHealCast(state);
-        updateGroundEnemies(groundEnemies, gameplayMap, playerPosition);
-        removeDefeatedGroundEnemies(groundEnemies, state);
-
-        state.stats.soul.maximum = kSoulMeterMax;
-        if (!state.infiniteSoulMode && state.stats.soul.current > state.stats.soul.maximum) {
-            state.stats.soul.current = state.stats.soul.maximum;
-        }
-
-        if (state.infiniteSoulMode) {
-            state.stats.soul.current = state.stats.soul.maximum;
         }
 
         mapDrawer.currentmap = buildHud(state, static_cast<int>(groundEnemies.size())) + buildRenderMap(gameplayMap, state, groundEnemies);

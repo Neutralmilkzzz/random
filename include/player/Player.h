@@ -9,7 +9,9 @@
 #include "shared/GameTypes.h"
 
 namespace game {
+class Enemy;
 class GroundEnemy;
+class FlyingEnemy;
 }
 
 class Player {
@@ -20,12 +22,16 @@ public:
 
     void resetRuntimeState();
     void move(std::string& currentmap);
-    void updateCombat(const std::string& gameplayMap, game::GroundEnemy& groundEnemy);
-    void receiveDamage(const std::string& sourceLabel);
+    void updateCombat(const std::string& gameplayMap,
+                      game::GroundEnemy& groundEnemy,
+                      game::FlyingEnemy& flyingEnemy);
+    void receiveDamage(const std::string& sourceLabel,
+                       const game::Position& playerPosition = game::Position(-1, -1));
 
     bool isMovementLocked() const;
     bool isVisible() const;
     bool isAlive() const;
+    bool consumeResetRequest();
 
     const game::CharacterStats& getStats() const;
     game::FacingDirection getFacingDirection() const;
@@ -148,6 +154,18 @@ private:
         }
     };
 
+    struct DeathAnimationState {
+        bool active;
+        int elapsedFrames;
+        game::Position center;
+
+        DeathAnimationState()
+            : active(false),
+              elapsedFrames(0),
+              center(-1, -1) {
+        }
+    };
+
     KeyStateManager& ksm;
     bool isJumping;
     bool jumpHeldLastFrame;
@@ -168,11 +186,13 @@ private:
     UpWaveCastState upWaveCast;
     DownSlamCastState downSlamCast;
     MeleeVisualState meleeVisual;
+    DeathAnimationState deathAnimation;
     RewardPopupState rewardPopup;
     std::vector<VisualProjectile> projectiles;
     std::unordered_map<int, bool> previousKeys;
     std::string lastAction;
     std::string lastResult;
+    bool resetQueued;
 
     bool isKeyDown(int keyCode) const;
     bool wasKeyDown(int keyCode) const;
@@ -181,29 +201,38 @@ private:
 
     void updateFacingFromInput();
     void updateBlink();
+    void updateDeathAnimation();
     void updateHealCast();
     void updateRewardPopup();
-    void updateUpWaveCast(const std::string& gameplayMap, game::GroundEnemy& groundEnemy);
-    void updateDownSlamCast(const std::string& gameplayMap, game::GroundEnemy& groundEnemy);
+    void updateUpWaveCast(const std::string& gameplayMap,
+                         game::GroundEnemy& groundEnemy,
+                         game::FlyingEnemy& flyingEnemy);
+    void updateDownSlamCast(const std::string& gameplayMap,
+                           game::GroundEnemy& groundEnemy,
+                           game::FlyingEnemy& flyingEnemy);
     void updateMeleeVisual();
-    void updateProjectiles(const std::string& gameplayMap, game::GroundEnemy& groundEnemy);
+    void updateProjectiles(const std::string& gameplayMap,
+                          game::GroundEnemy& groundEnemy,
+                          game::FlyingEnemy& flyingEnemy);
 
     void castHorizontalWave(const game::Position& playerPosition);
     void castUpWave(const game::Position& playerPosition);
     void castDownSlam(const std::string& gameplayMap, const game::Position& playerPosition);
     void startHealCast();
     void startMeleeVisual(MeleeVisualType type, const game::Position& origin);
+    void triggerDeathAnimation(const game::Position& center, const std::string& sourceLabel);
 
     int upWaveStage() const;
     int downSlamStage() const;
     int meleeVisualStage() const;
+    int deathExpansionRadius() const;
 
     bool isEnemyInMeleeRange(const game::Position& playerPosition,
                              const game::Position& enemyPosition) const;
-    bool applyDamageToEnemyAtPosition(game::GroundEnemy& groundEnemy,
+    bool applyDamageToEnemyAtPosition(game::Enemy& enemy,
                                       const game::Position& targetPosition,
                                       const game::DamageInfo& damageInfo);
-    bool applyDamageToEnemyInMeleeRange(game::GroundEnemy& groundEnemy,
+    bool applyDamageToEnemyInMeleeRange(game::Enemy& enemy,
                                         const game::Position& playerPosition,
                                         const game::DamageInfo& damageInfo);
     void grantKillReward(int amount);
@@ -219,6 +248,7 @@ private:
 
     std::vector<std::string> buildSoulVesselLines() const;
     std::string buildHealthOrbLine() const;
+    void applyDeathAnimationOverlay(std::string& renderMap) const;
 };
 
 #endif // TESTCPP1_PLAYER_H

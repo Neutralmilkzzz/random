@@ -18,12 +18,12 @@ static bool terminal_configured = false;
 void KeyStateManager::readKeys() {
 #ifdef _WIN32
     const char watchedLetters[] = {
-            'A', 'C', 'D', 'W', 'S',
+            'A', 'C', 'D', 'E', 'W', 'S',
             'J', 'I', 'K', 'L',
             'O', 'M', 'R', 'H',
-            'P'
+            'P', 'X'
     };
-    const char watchedDigits[] = {'1', '2', '3'};
+    const char watchedDigits[] = {'1', '2', '3', '4'};
 
     for (size_t index = 0; index < sizeof(watchedLetters) / sizeof(watchedLetters[0]); ++index) {
         const char uppercase = watchedLetters[index];
@@ -40,6 +40,7 @@ void KeyStateManager::readKeys() {
     }
 
     keyStates[' '] = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+    keyStates[0x0D] = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
     keyStates[0x1B] = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
 #else
     // Linux/macOS: 配置终端（只做一次）
@@ -67,6 +68,10 @@ void KeyStateManager::readKeys() {
         char ch;
         while (read(STDIN_FILENO, &ch, 1) == 1) {
             keyStates[ch] = true;  // 设置按键为按下
+
+            if (ch == '\r' || ch == '\n') {
+                keyStates[0x0D] = true;
+            }
 
             // 大小写互相关联
             if (ch >= 'A' && ch <= 'Z') {

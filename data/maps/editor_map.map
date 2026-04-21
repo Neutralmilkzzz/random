@@ -1,0 +1,29 @@
+id=editor_map
+display_name=Editor Map
+type=CombatRoom
+boss_room=false
+
+[spawn_points]
+editor_spawn,1,8
+
+[enemy_spawns]
+ground_enemy_basic,52,2
+ground_enemy_basic,36,8
+ground_enemy_basic,32,8
+ground_enemy_basic,27,8
+
+[npc_placements]
+
+[transitions]
+
+[terrain]
+============================================================================
+=                                                                          =
+=                                                                          =
+=                                                                          =
+=                                                                          =
+=           ==========        ===========      =========                   =
+=                                                                          =
+=                                                                          =
+=                                                                          =
+============================================================================

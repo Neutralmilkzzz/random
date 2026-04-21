@@ -12,7 +12,7 @@ if errorlevel 1 (
 
 set "SANDBOX=%~1"
 if "%SANDBOX%"=="" (
-    echo Usage: run_sandbox.bat [player^|skill^|combat^|enemy^|world]
+    echo Usage: run_sandbox.bat [player^|skill^|combat^|enemy^|world^|editor]
     echo Example: run_sandbox.bat player
     pause
     exit /b 1
@@ -50,9 +50,15 @@ if /I "%SANDBOX%"=="world" (
     set "EXTRA_SRCS=src\world\WorldSystem.cpp"
 )
 
+if /I "%SANDBOX%"=="editor" (
+    set "TARGET=map_editor_sandbox.exe"
+    set "ENTRY=src\sandbox\MapEditorSandbox.cpp"
+    set "EXTRA_SRCS=src\world\WorldSystem.cpp src\enemy\Enemy.cpp src\player\Player.cpp src\world\MapDrawer.cpp src\input\KeyStateManager.cpp"
+)
+
 if "%ENTRY%"=="" (
     echo [ERROR] Unknown sandbox: %SANDBOX%
-    echo Available: player, skill, combat, enemy, world
+    echo Available: player, skill, combat, enemy, world, editor
     pause
     exit /b 1
 )
