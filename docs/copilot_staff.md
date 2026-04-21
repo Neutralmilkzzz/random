@@ -18,9 +18,9 @@
 | Copilot 名称 | Resume | 负责模块 | 当前状态 | 最新进展 | 阻塞 | 接手人 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Copilot CLI（GPT-5.4） | `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | 项目结构、构建入口、沙盒、地面敌人、飞行敌人原型、Boss 原型 / `CombatSystem`、参数文档、`module_02 / module_04` 地图细化、Soul HUD 修复 | 已完成（本轮交付） | 已完成 Boss demo 下沉到 `Enemy.*`、`CombatSystem` 最小结算接口与相关文档：`boss-demo-into-enemy`、`combat-resolver-implement`、`combat-resolver-docs` 均已 done；主流程位现可直接读取 Boss 状态、攻击信号与一次性击杀奖励 | 仅剩 `combat-resolver-design` 处于 blocked，且该项原本就依赖别的 AI 先完成 `PlayerSandbox` 相关改动，不属于本轮未收尾项 | 下一位接手主流程接线、Boss 正式接入或继续补完整 Battle loop 的 Copilot |
-| Copilot CLI（GPT-5.4） | copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd | 技能/攻击 ASCII 表现设计、法术分镜、显示语义约定 | 进行中 | 已补充左右冲击波、下砸、普通攻击缺口、敌人受伤/死亡、HKD/HUD 与 `YOU DEAD` 白屏死亡演出的 ASCII 方案 | 无 | 下一位接手技能正式渲染接入、玩家攻击判定或死亡演出落地的 Copilot |
+| Copilot CLI（GPT-5.4） | copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd | 技能/攻击 ASCII 表现设计、法术分镜、显示语义约定、Player dash 动画 | 进行中 | 已补充左右冲击波、下砸、普通攻击缺口、敌人受伤/死亡、HKD/HUD 与 `YOU DEAD` 白屏死亡演出的 ASCII 方案；本轮补了主线 `SHIFT` dash 的简易拖尾动画，让冲刺时有明显位移感 | 无 | 下一位接手技能正式渲染接入、玩家攻击判定、进一步战斗手感优化或死亡演出落地的 Copilot |
 | Copilot CLI（GPT-5.4） | `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e` | 玩家沙盒、敌人沙盒、MapDrawer 渲染、参数同步、主线 Player 接入、`module_01 / module_03` 地图细化、主菜单 / 存档最小闭环、捷径门持久化解锁、二段跳 / 普通 dash、Boss 房主流程接线 / 入场对话 / 胜利结算 | 已完成 | 已完成玩家攻击/法术/HUD/`YOU DEAD` 死亡演出接入主线 `Player.cpp`，改成 `W/S` + `J/K` 组合键映射，并细化 `module_01`、`module_03`；已补完 `NEW GAME` / `CONTINUE` / 最小存档闭环与捷径门持久化解锁；现已把普通横向 dash 定为默认 `SHIFT`，并将二段跳改成商人售卖、购买后随存档持久化的能力；本轮已把 `boss_room_01` 接成“进房对白 -> 开战 -> Boss 死亡 -> VICTORY 结算”的主流程闭环，并保持死亡恢复链路可复用 | 无 | 下一个负责玩家状态机、击退、主线战斗、固定存档点、Boss 收尾 polish 或整线跑图验证的人 |
-| Copilot CLI（GPT-5.4） | ` copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 参数整理、调参文档、员工文档、进度盘点、地图仓库、`NpcSystem` 最小交互、主界面 HUD 精简、`boss_room_01` 决战房收口 | 进行中 | 已完成基础参数归档、员工登记表建立与 resume 对应、8 张白盒地图 + `testcpp1` 主线接线、地图分工表；已细化 `spawn_village` / `random_event_01`，修复 `module_02` 入口卡墙与 `module_01` 边界破损；已落地 `NpcSystem` 最小交互模块，并把主界面改成顶部极简 HUD + 底部常驻操作说明，现已把 `NpcSystem` 正式接进 `main.cpp` 运行时，支持 `E` 交互 / `W/S` 选项 / `J` 购买，并补齐 `Makefile` / `run.bat` 构建项；本轮按最新地图重构任务重做了 `module_05`，并已把 `boss_room_01` 收成右侧入场缓冲 + 中左部开阔主战场的决战房骨架，保留门位、不放杂兵，为 Boss 对话和胜利结算预留空间 | 待继续做整线跑图验证，并确认 Boss 房正式接线后节奏和门位读感都稳定 | 下一位接手整线跑图验证、Boss 房主流程接线验证或继续补文档的 Copilot |
+| Copilot CLI（GPT-5.4） | ` copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 参数整理、调参文档、员工文档、进度盘点、地图仓库、`NpcSystem` 最小交互、主界面 HUD 精简、`boss_room_01` 决战房收口、战斗手感回归验证 | 进行中 | 已完成基础参数归档、员工登记表建立与 resume 对应、8 张白盒地图 + `testcpp1` 主线接线、地图分工表；已细化 `spawn_village` / `random_event_01`，修复 `module_02` 入口卡墙与 `module_01` 边界破损；已落地 `NpcSystem` 最小交互模块，并把主界面改成顶部极简 HUD + 底部常驻操作说明，现已把 `NpcSystem` 正式接进 `main.cpp` 运行时，支持 `E` 交互 / `W/S` 选项 / `J` 购买，并补齐 `Makefile` / `run.bat` 构建项；本轮按最新地图重构任务重做了 `module_05`，并已把 `boss_room_01` 收成右侧入场缓冲 + 中左部开阔主战场的决战房骨架，保留门位、不放杂兵，为 Boss 对话和胜利结算预留空间；夜间回归复核后确认：上下法术判定范围已扩大并能编译通过，但“地面敌人冲刺后贴地”和“上/下劈砍命中加 Soul”两项在当前仓库代码中仍未真正落地 | 待对应代码负责人补完剩余 2 项后，再做一次整线复核并关闭战斗手感插单 | 下一位接手 `Enemy.*` / `Player.*` 剩余两项修复，或在代码修复后继续补最终验证记录的 Copilot |
 
 ---
 
@@ -57,6 +57,9 @@
 | 2026-04-21 | Copilot CLI（GPT-5.4） | Boss 房成型并行任务下发 | 已完成 | 按“Boss 房重做 + Boss 正式嵌入 + 入场对话 + 死亡后胜利结算”这一条主线，把工作拆给 3 个 AI：地图、Boss 本体/战斗、主流程接线/UI 各自独立推进，确保可同时开发且不抢文件 | 3 位负责人各自认领并行推进 | 当前目标是把 demo 从“很好玩的原型”收成“有终点、有结算的完整成型版” |
 | 2026-04-21 | Copilot CLI（GPT-5.4） | `boss_room_01` 决战房收口 | 已完成 | 只改 `data\\maps\\boss_room_01.map`：去掉杂兵刷点，保留右侧回程门位和出生点不动，改成右侧短入场缓冲 + 中左部开阔横向战斗区，并只留下少量高位平台与右侧顶棚，给 Boss 登场对话与胜利结算预留清晰空间 | 下一位接手 Boss 房主流程接线、Boss 刷入验证或整线跑图验证的 Copilot | 已自查行宽、门位、出生点脚下支撑和无封死路线；当前不负责 Boss 刷入逻辑与对话流程 |
 | 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af` | Boss demo 下沉 / `CombatSystem` 最小结算接口 | 已完成 | 该线负责人已确认：`boss-demo-into-enemy`、`combat-resolver-implement`、`combat-resolver-docs` 全部 done；Boss 状态读取、攻击信号消费和一次性击杀奖励接口已可供主流程位直接接入 | 下一位接手 Boss 房主流程接线 / `VICTORY` 结算的 Copilot | 仅剩 `combat-resolver-design` 为 blocked，但它本来就依赖其他 AI 先完成 `PlayerSandbox` 相关改动，不属于这次交付未收尾 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） | 战斗手感优化插单下发 | 已完成 | 记录用户实机发现的 3 个问题：`g` 地面敌人冲刺后可能浮空、上下劈砍未增加 Soul、上下法术判定范围偏小；并按不抢文件的原则拆给 3 个 AI 分开优化 | 3 位负责人各自认领并行推进 | 本轮要求优先做最小可感知优化，不顺手扩大成全面重构 |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb` | 战斗手感插单回归验证 / 文档回填 | 已完成 | 只读当前仓库代码并重新编译 `player_sandbox.exe`、`enemy_sandbox.exe`、`testcpp1_validation.exe` 复核：向上法术现为 5 格纵向列 + 3 格 crown，向下法术现为整段下砸列 + 3 格落地爆点，判定范围已较旧版放大；随后按用户提示复查到 `Player.cpp` 已于更晚版本把上劈 / 下劈命中后的 `Soul +11` 补齐；当前仍只剩 `GroundEnemy::DashAttack / AttackRecovery` 路径未统一贴回 `spawnPosition.y` | 下一位接手 `Enemy.*` 剩余贴地修复，再由文档位复核收口 | 本轮严格未越界改代码；结论已同步回 `parameter_tuning.md` 与 staff |
+| 2026-04-21 | Copilot CLI（GPT-5.4） `copilot --resume=b8996a16-a959-4def-8a5b-bd2ebdd8eccd` | Player dash 简易动画 | 已完成 | 在 `Player` 主线渲染里给 `SHIFT` dash 补了简易拖尾和前缘方向提示：冲刺前半程更亮、后半程衰减，不改 dash 判定和位移逻辑，只增强可读性 | 下一位接手继续做 dash 手感 polish 或整线跑图验证的 Copilot | 本轮只改 `Player.*` 的显示层，不触碰主流程和战斗结算 |
 
 ---
 
@@ -242,6 +245,126 @@
 - 任务 B 先把 Boss 模块和结果接口做稳，等待任务 A 接入。
 - 任务 C 只管房间结构，不管 Boss 刷入逻辑和对话流程。
 - 这 3 条线都完成后，当前 demo 就可视为进入“成型可交付”状态。
+
+---
+
+## 战斗手感优化插单（3 个 AI，继续分开开发）
+
+用户实机反馈的 3 个问题：
+
+1. `g` 地面敌人冲刺后有概率浮空，疑似缺少冲刺结束后的贴地 / 落地处理
+2. 上下劈砍目前没有增加 Soul
+3. 向上 / 向下法术的判定范围偏小，需要适度放大
+
+拆分原则：
+
+1. `Enemy.*` / `CombatSystem.*` 仍然只允许 **1 个 AI** 改
+2. `Player.*` 仍然只允许 **1 个 AI** 改
+3. 验证 / 文档 / 参数同步由另一个 AI 负责，不反向覆盖代码线
+4. 本轮只修用户已经明确指出的问题，不顺手做大规模战斗重构
+
+### 插单 A：地面敌人冲刺后贴地修正
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=fdc64aaa-c115-4144-99c3-7771e98aa2af`
+
+**目标**
+
+- 修正 `g` 地面敌人冲刺结束后偶发浮空的问题
+- 保证冲刺后的敌人仍然落在真实平面上，不悬空、不停在错误高度
+
+**只负责这些文件**
+
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- 如确实需要最小配合：`include\combat\CombatSystem.h`
+- 如确实需要最小配合：`src\combat\CombatSystem.cpp`
+
+**本轮交付**
+
+- 冲刺结束后的地面敌人不会停在半空
+- 不破坏现有索敌、前摇、攻击触发和门前空间
+- 如需要贴地补偿逻辑，应写在敌人 / 战斗侧，不回退到地图侧乱修
+
+**禁止触碰**
+
+- `src\player\Player.cpp`
+- `include\player\Player.h`
+- `src\core\main.cpp`
+
+### 插单 B：玩家上下劈砍 Soul 与上下法术判定范围优化
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=afb13241-a3b1-49f4-8863-626279fc7f6e`
+
+**目标**
+
+- 让上劈 / 下劈命中后也能按合理规则增加 Soul
+- 适度扩大向上 / 向下法术判定范围，让手感不再过窄
+
+**只负责这些文件**
+
+- `include\player\Player.h`
+- `src\player\Player.cpp`
+- 如需同步参数：`docs\parameter_tuning.md`
+
+**本轮交付**
+
+- 上劈 / 下劈命中后 Soul 增长规则与横斩逻辑一致或保持明确统一
+- 向上法术和向下法术判定范围明显比当前更宽，但不要夸张到穿透半张图
+- 不破坏现有 `J/K`、`W/S` 输入映射和 Boss 房主流程
+
+**禁止触碰**
+
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- `src\core\main.cpp`
+- `include\combat\CombatSystem.h`
+- `src\combat\CombatSystem.cpp`
+
+### 插单 C：实机回归验证 / 参数回填 / staff 同步
+
+**负责人**
+
+- Copilot CLI（GPT-5.4） `copilot --resume=ef54648a-46f6-4977-b24c-6dd9837bb4bb`
+
+**目标**
+
+- 在前两条线完成后，专门验证这 3 个问题是否真正消失
+- 补齐文档和员工登记，不让这轮优化只停留在口头说明
+
+**只负责这些文件**
+
+- `docs\parameter_tuning.md`
+- `docs\game_design.md`
+- `docs\copilot_staff.md`
+
+**本轮交付**
+
+- 明确记录：地面敌人冲刺贴地、上下劈砍 Soul、上下法术判定范围 3 项都已回归验证
+- 若发现新问题，只在 staff 里记录，不直接越界改代码文件
+- 把本轮战斗手感优化的最终结论写回文档
+
+**禁止触碰**
+
+- `src\player\Player.cpp`
+- `include\player\Player.h`
+- `include\enemy\Enemy.h`
+- `src\enemy\Enemy.cpp`
+- `src\core\main.cpp`
+- `include\combat\CombatSystem.h`
+- `src\combat\CombatSystem.cpp`
+
+**回归结论（当前仓库夜间复核）**
+
+- 向上 / 向下法术判定范围：**已通过**
+  - 当前实现已是更宽的纵向列 + 终段扩展爆点，不再是过窄的单线命中感。
+- `g` 地面敌人冲刺后贴地：**未通过**
+  - `GroundEnemy::DashAttack / AttackRecovery` 路径仍未统一贴回地面高度，浮空风险未算真正关闭。
+- 上劈 / 下劈命中加 Soul：**已通过**
+  - `Player.cpp` 当前已在上劈 / 下劈命中分支同步执行 `Soul +11`，与横斩收益规则保持一致。
 
 ---
 

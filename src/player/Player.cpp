@@ -26,6 +26,11 @@ const int kDashCooldownFrames = 18;
 const int kBlinkFrames = 125;
 const int kHealLockoutFrames = 188;
 const int kAttackRange = 2;
+const int kUpWaveVerticalReach = 5;
+const int kUpWaveUpperSpreadHalfWidth = 1;
+const int kUpWaveCrownHalfWidth = 2;
+const int kDownSlamUpperBlastHalfWidth = 1;
+const int kDownSlamImpactHalfWidth = 2;
 const int kHealCastFrames = 42;
 const int kUpWaveCastFrames = 18;
 const int kDownSlamCastFrames = 16;
@@ -36,7 +41,7 @@ const int kDeathExpandFrames = 24;
 const int kDeathFullWhiteFrames = 10;
 const int kDeathTextFrames = 60;
 const int kSoulMeterMax = 99;
-const int kSoulGainOnBasicHit = 11;
+const int kSoulGainOnMeleeHit = 11;
 const int kSoulSkillCost = 33;
 const int kPlayerAttackDamage = 1;
 const int kSoulFillUnits = 3;
@@ -148,6 +153,8 @@ bool moveHorizontallyOneTile(std::string& currentmap, int dx) {
 
 Player::Player(KeyStateManager& keyStateManager)
     : ksm(keyStateManager),
+      id("player"),
+      combatPosition(-1, -1),
       isJumping(false),
       jumpHeldLastFrame(false),
       doubleJumpUnlocked(true),
@@ -182,6 +189,7 @@ void Player::resetRuntimeState() {
     stats = game::CharacterStats();
     stats.soul.maximum = kSoulMeterMax;
     stats.soul.current = 0;
+    combatPosition = game::Position(-1, -1);
     isJumping = false;
     jumpHeldLastFrame = false;
     airJumpAvailable = doubleJumpUnlocked;
@@ -512,6 +520,10 @@ void Player::updateCombat(const std::string& gameplayMap,
         return;
     }
 
+    setCombatPosition(playerPosition);
+
+    const game::CombatSystem combatSystem;
+
     const bool aimingUp = isKeyDown('w') || isKeyDown('W');
     const bool aimingDown = isKeyDown('s') || isKeyDown('S');
     const bool physicalPressed = isJustPressed('j') || isJustPressed('J');
@@ -521,46 +533,56 @@ void Player::updateCombat(const std::string& gameplayMap,
         if (aimingUp) {
             startMeleeVisual(MeleeVisualType::Up, playerPosition);
             lastAction = "Up Slash";
-            if (applyDamageToEnemyInMeleeRange(
-                        groundEnemy,
-                        playerPosition,
-                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true)) ||
-                applyDamageToEnemyInMeleeRange(
-                        flyingEnemy,
-                        playerPosition,
-                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true))) {
-                lastResult = "Up slash connected.";
+            game::AttackDefinition attack;
+            attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, id, true);
+            const bool groundHit = applyEnemyCombatResolution(
+                    groundEnemy,
+                    combatSystem.resolveAttackInVerticalRange(*this, groundEnemy, attack, true),
+                    combatSystem);
+            const bool flyingHit = applyEnemyCombatResolution(
+                    flyingEnemy,
+                    combatSystem.resolveAttackInVerticalRange(*this, flyingEnemy, attack, true),
+                    combatSystem);
+            if (groundHit || flyingHit) {
+                stats.soul.current = std::min(stats.soul.maximum, stats.soul.current + kSoulGainOnMeleeHit);
+                lastResult = "Up slash connected. Soul +11.";
             } else {
                 lastResult = "Slash triggered. No target in range.";
             }
         } else if (aimingDown) {
             startMeleeVisual(MeleeVisualType::Down, playerPosition);
             lastAction = "Down Slash";
-            if (applyDamageToEnemyInMeleeRange(
-                        groundEnemy,
-                        playerPosition,
-                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true)) ||
-                applyDamageToEnemyInMeleeRange(
-                        flyingEnemy,
-                        playerPosition,
-                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true))) {
-                lastResult = "Down slash connected.";
+            game::AttackDefinition attack;
+            attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, id, true);
+            const bool groundHit = applyEnemyCombatResolution(
+                    groundEnemy,
+                    combatSystem.resolveAttackInVerticalRange(*this, groundEnemy, attack, false),
+                    combatSystem);
+            const bool flyingHit = applyEnemyCombatResolution(
+                    flyingEnemy,
+                    combatSystem.resolveAttackInVerticalRange(*this, flyingEnemy, attack, false),
+                    combatSystem);
+            if (groundHit || flyingHit) {
+                stats.soul.current = std::min(stats.soul.maximum, stats.soul.current + kSoulGainOnMeleeHit);
+                lastResult = "Down slash connected. Soul +11.";
             } else {
                 lastResult = "Slash triggered. No target in range.";
             }
         } else {
             startMeleeVisual(MeleeVisualType::Horizontal, playerPosition);
             lastAction = "Basic Attack";
-            const bool groundHit = applyDamageToEnemyInMeleeRange(
+            game::AttackDefinition attack;
+            attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, id, true);
+            const bool groundHit = applyEnemyCombatResolution(
                     groundEnemy,
-                    playerPosition,
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
-            const bool flyingHit = applyDamageToEnemyInMeleeRange(
+                    combatSystem.resolveAttackInFrontRange(*this, groundEnemy, attack, kAttackRange, 1),
+                    combatSystem);
+            const bool flyingHit = applyEnemyCombatResolution(
                     flyingEnemy,
-                    playerPosition,
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
+                    combatSystem.resolveAttackInFrontRange(*this, flyingEnemy, attack, kAttackRange, 1),
+                    combatSystem);
             if (groundHit || flyingHit) {
-                stats.soul.current = std::min(stats.soul.maximum, stats.soul.current + kSoulGainOnBasicHit);
+                stats.soul.current = std::min(stats.soul.maximum, stats.soul.current + kSoulGainOnMeleeHit);
                 lastResult = "Slash connected. Soul +11.";
             } else {
                 lastResult = "No target in range.";
@@ -597,11 +619,25 @@ void Player::updateCombat(const std::string& gameplayMap,
 }
 
 void Player::receiveDamage(const std::string& sourceLabel, const game::Position& playerPosition) {
-    if (blinkFramesRemaining > 0 || stats.health.current <= 0 || deathAnimation.active) {
+    const game::Position resolvedPosition = playerPosition.x >= 0 && playerPosition.y >= 0
+            ? playerPosition
+            : combatPosition;
+    setCombatPosition(resolvedPosition);
+    takeDamage(game::DamageInfo(1, game::DamageType::Contact, sourceLabel, true));
+}
+
+void Player::applyIncomingDamage(const game::DamageInfo& damageInfo,
+                                 const game::Position& playerPosition) {
+    if (blinkFramesRemaining > 0 ||
+        stats.health.current <= 0 ||
+        deathAnimation.active ||
+        damageInfo.amount <= 0) {
         return;
     }
 
-    stats.health.current = std::max(0, stats.health.current - 1);
+    const std::string sourceLabel = damageInfo.sourceId.empty() ? "Unknown source" : damageInfo.sourceId;
+    const int damageAmount = std::max(0, damageInfo.amount);
+    stats.health.current = std::max(0, stats.health.current - damageAmount);
     framesSinceLastDamage = 0;
     blinkFramesRemaining = kBlinkFrames;
     hitFeedback.blinking = true;
@@ -612,7 +648,7 @@ void Player::receiveDamage(const std::string& sourceLabel, const game::Position&
         lastResult = sourceLabel + " defeated the player.";
         triggerDeathAnimation(playerPosition, sourceLabel);
     } else {
-        lastResult = sourceLabel + " dealt 1 damage.";
+        lastResult = sourceLabel + " dealt " + std::to_string(damageAmount) + " damage.";
     }
 }
 
@@ -641,6 +677,26 @@ const game::CharacterStats& Player::getStats() const {
     return stats;
 }
 
+const std::string& Player::getId() const {
+    return id;
+}
+
+game::Position Player::getPosition() const {
+    return combatPosition;
+}
+
+game::CharacterStats& Player::accessStats() {
+    return stats;
+}
+
+game::HitFeedbackState& Player::accessHitFeedback() {
+    return hitFeedback;
+}
+
+void Player::takeDamage(const game::DamageInfo& damageInfo) {
+    applyIncomingDamage(damageInfo, combatPosition);
+}
+
 void Player::restoreSavedStats(const game::CharacterStats& savedStats) {
     resetRuntimeState();
     stats = savedStats;
@@ -659,6 +715,10 @@ void Player::restoreSavedStats(const game::CharacterStats& savedStats) {
 
 game::FacingDirection Player::getFacingDirection() const {
     return facing;
+}
+
+void Player::setCombatPosition(const game::Position& position) {
+    combatPosition = position;
 }
 
 void Player::setDoubleJumpUnlocked(bool unlocked) {
@@ -708,6 +768,18 @@ void Player::overlayRender(std::string& renderMap, const std::string& gameplayMa
         } else {
             placeGlyph(renderMap, game::Position(playerPosition.x, playerPosition.y - 2), '\'');
             placeGlyph(renderMap, game::Position(playerPosition.x, playerPosition.y - 3), '.');
+        }
+    }
+
+    if (playerPosition.x >= 0 && playerPosition.y >= 0 && dashActive) {
+        const std::vector<SpellVisualCell> cells = buildDashVisualCells();
+        for (size_t index = 0; index < cells.size(); ++index) {
+            const game::Position target(playerPosition.x + cells[index].dx,
+                                        playerPosition.y + cells[index].dy);
+            if (!isInsidePlayableArea(gameplayMap, target) || tileAt(gameplayMap, target) == '=') {
+                continue;
+            }
+            placeGlyph(renderMap, target, cells[index].glyph);
         }
     }
 
@@ -897,16 +969,19 @@ void Player::updateUpWaveCast(const std::string& gameplayMap,
     const int stage = upWaveStage();
 
     if (!upWaveCast.damageResolved && stage >= 3) {
+        const game::CombatSystem combatSystem;
+        game::AttackDefinition attack;
+        attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulWaveUp, id, true);
         const std::vector<game::Position> damageCells = buildUpWaveDamageCells(gameplayMap, stage >= 4);
         for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
-            const bool hitGround = applyDamageToEnemyAtPosition(
+            const bool hitGround = applyEnemyCombatResolution(
                     groundEnemy,
-                    damageCells[cellIndex],
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulWaveUp, "player", true));
-            const bool hitFlying = applyDamageToEnemyAtPosition(
+                    combatSystem.resolveAttackAtPosition(groundEnemy, damageCells[cellIndex], attack),
+                    combatSystem);
+            const bool hitFlying = applyEnemyCombatResolution(
                     flyingEnemy,
-                    damageCells[cellIndex],
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulWaveUp, "player", true));
+                    combatSystem.resolveAttackAtPosition(flyingEnemy, damageCells[cellIndex], attack),
+                    combatSystem);
             if (hitGround || hitFlying) {
                 lastAction = "Up Soul Wave";
                 lastResult = "Soul crown connected.";
@@ -944,16 +1019,19 @@ void Player::updateDownSlamCast(const std::string& gameplayMap,
     const int stage = downSlamStage();
 
     if (!downSlamCast.damageResolved && stage >= 2) {
-        const std::vector<game::Position> damageCells = buildDownSlamDamageCells();
+        const game::CombatSystem combatSystem;
+        game::AttackDefinition attack;
+        attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulSlam, id, true);
+        const std::vector<game::Position> damageCells = buildDownSlamDamageCells(gameplayMap);
         for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
-            applyDamageToEnemyAtPosition(
+            applyEnemyCombatResolution(
                     groundEnemy,
-                    damageCells[cellIndex],
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulSlam, "player", true));
-            applyDamageToEnemyAtPosition(
+                    combatSystem.resolveAttackAtPosition(groundEnemy, damageCells[cellIndex], attack),
+                    combatSystem);
+            applyEnemyCombatResolution(
                     flyingEnemy,
-                    damageCells[cellIndex],
-                    game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulSlam, "player", true));
+                    combatSystem.resolveAttackAtPosition(flyingEnemy, damageCells[cellIndex], attack),
+                    combatSystem);
         }
         downSlamCast.damageResolved = true;
         lastAction = "Down Slam";
@@ -992,6 +1070,7 @@ void Player::updateProjectiles(const std::string& gameplayMap,
                                game::GroundEnemy& groundEnemy,
                                game::FlyingEnemy& flyingEnemy) {
     std::vector<VisualProjectile> activeProjectiles;
+    const game::CombatSystem combatSystem;
 
     for (size_t index = 0; index < projectiles.size(); ++index) {
         VisualProjectile projectile = projectiles[index];
@@ -1014,14 +1093,16 @@ void Player::updateProjectiles(const std::string& gameplayMap,
         const game::DamageType damageType = projectile.dy < 0
                 ? game::DamageType::SoulWaveUp
                 : game::DamageType::SoulWaveHorizontal;
-        if (applyDamageToEnemyAtPosition(
+        game::AttackDefinition attack;
+        attack.damage = game::DamageInfo(kPlayerAttackDamage, damageType, id, true);
+        if (applyEnemyCombatResolution(
                     groundEnemy,
-                    projectile.position,
-                    game::DamageInfo(kPlayerAttackDamage, damageType, "player", true)) ||
-            applyDamageToEnemyAtPosition(
+                    combatSystem.resolveAttackAtPosition(groundEnemy, projectile.position, attack),
+                    combatSystem) ||
+            applyEnemyCombatResolution(
                     flyingEnemy,
-                    projectile.position,
-                    game::DamageInfo(kPlayerAttackDamage, damageType, "player", true))) {
+                    combatSystem.resolveAttackAtPosition(flyingEnemy, projectile.position, attack),
+                    combatSystem)) {
             lastAction = projectile.label;
             lastResult = "Projectile hit the target.";
             continue;
@@ -1230,72 +1311,31 @@ int Player::deathExpansionRadius() const {
     return radii[stage];
 }
 
-bool Player::isEnemyInMeleeRange(const game::Position& playerPosition,
-                                 const game::Position& enemyPosition) const {
-    const int deltaX = enemyPosition.x - playerPosition.x;
-    const int deltaY = std::abs(enemyPosition.y - playerPosition.y);
-
-    if (deltaY > 1) {
-        return false;
-    }
-
-    if (facing == game::FacingDirection::Right) {
-        return deltaX >= 1 && deltaX <= kAttackRange;
-    }
-
-    return deltaX <= -1 && deltaX >= -kAttackRange;
-}
-
-bool Player::applyDamageToEnemyAtPosition(game::Enemy& enemy,
-                                          const game::Position& targetPosition,
-                                          const game::DamageInfo& damageInfo) {
-    if (!enemy.isAlive()) {
-        return false;
-    }
-
-    const game::Position enemyPosition = enemy.getPosition();
-    if (enemyPosition.x == targetPosition.x && enemyPosition.y == targetPosition.y) {
-        const bool wasAlive = enemy.isAlive();
-        enemy.takeDamage(damageInfo);
-        if (wasAlive && !enemy.isAlive()) {
-            grantKillReward(enemy.getHkdReward());
-        }
-        return true;
-    }
-
-    return false;
-}
-
-bool Player::applyDamageToEnemyInMeleeRange(game::Enemy& enemy,
-                                            const game::Position& playerPosition,
-                                            const game::DamageInfo& damageInfo) {
-    if (!enemy.isAlive()) {
-        return false;
-    }
-
-    if (!isEnemyInMeleeRange(playerPosition, enemy.getPosition())) {
-        return false;
-    }
-
-    const bool wasAlive = enemy.isAlive();
-    enemy.takeDamage(damageInfo);
-    if (wasAlive && !enemy.isAlive()) {
-        grantKillReward(enemy.getHkdReward());
-    }
-    return true;
-}
-
-void Player::grantKillReward(int amount) {
-    if (amount <= 0) {
+void Player::applyCombatReward(const game::RewardResolution& reward,
+                               const game::CombatSystem& combatSystem) {
+    if (reward.hkdGranted <= 0 && reward.soulGranted <= 0) {
         return;
     }
 
-    stats.hkd += amount;
-    rewardPopup.active = true;
-    rewardPopup.elapsedFrames = 0;
-    rewardPopup.totalFrames = 24;
-    rewardPopup.amount = amount;
-    lastResult = "Enemy defeated. HKD +" + std::to_string(amount) + ".";
+    combatSystem.applyReward(stats, reward);
+    if (reward.hkdGranted > 0) {
+        rewardPopup.active = true;
+        rewardPopup.elapsedFrames = 0;
+        rewardPopup.totalFrames = 24;
+        rewardPopup.amount = reward.hkdGranted;
+        lastResult = "Enemy defeated. HKD +" + std::to_string(reward.hkdGranted) + ".";
+    }
+}
+
+bool Player::applyEnemyCombatResolution(const game::Enemy& enemy,
+                                        const game::DamageResolution& resolution,
+                                        const game::CombatSystem& combatSystem) {
+    if (!resolution.hitApplied) {
+        return false;
+    }
+
+    applyCombatReward(combatSystem.buildEnemyRewardOnDefeat(enemy, resolution), combatSystem);
+    return true;
 }
 
 game::Position Player::findDownSlamImpactPosition(const std::string& gameplayMap,
@@ -1493,6 +1533,32 @@ std::vector<Player::SpellVisualCell> Player::buildDownSlamVisualCells() const {
     return cells;
 }
 
+std::vector<Player::SpellVisualCell> Player::buildDashVisualCells() const {
+    std::vector<SpellVisualCell> cells;
+    if (!dashActive) {
+        return cells;
+    }
+
+    const int elapsedFrames = std::max(0, kDashFrames - dashFramesRemaining);
+    const bool lateStage = elapsedFrames >= (kDashFrames / 2);
+
+    if (dashDirection >= 0) {
+        cells.push_back(SpellVisualCell(-1, 0, lateStage ? '-' : '='));
+        cells.push_back(SpellVisualCell(-2, 0, '.'));
+        if (!lateStage) {
+            cells.push_back(SpellVisualCell(1, 0, '>'));
+        }
+    } else {
+        cells.push_back(SpellVisualCell(1, 0, lateStage ? '-' : '='));
+        cells.push_back(SpellVisualCell(2, 0, '.'));
+        if (!lateStage) {
+            cells.push_back(SpellVisualCell(-1, 0, '<'));
+        }
+    }
+
+    return cells;
+}
+
 std::vector<Player::SpellVisualCell> Player::buildMeleeVisualCells() const {
     std::vector<SpellVisualCell> cells;
     const int stage = meleeVisualStage();
@@ -1531,17 +1597,32 @@ std::vector<Player::SpellVisualCell> Player::buildMeleeVisualCells() const {
 std::vector<game::Position> Player::buildUpWaveDamageCells(const std::string& gameplayMap, bool includeCrown) const {
     std::vector<game::Position> cells;
 
-    for (int dy = -1; dy >= -5; --dy) {
-        const game::Position position(upWaveCast.origin.x, upWaveCast.origin.y + dy);
-        if (!isInsidePlayableArea(gameplayMap, position) || tileAt(gameplayMap, position) == '=') {
+    for (int dy = -1; dy >= -kUpWaveVerticalReach; --dy) {
+        const game::Position centerPosition(upWaveCast.origin.x, upWaveCast.origin.y + dy);
+        if (!isInsidePlayableArea(gameplayMap, centerPosition) || tileAt(gameplayMap, centerPosition) == '=') {
             break;
         }
-        cells.push_back(position);
+        cells.push_back(centerPosition);
+
+        if (dy <= -3) {
+            for (int dx = -kUpWaveUpperSpreadHalfWidth; dx <= kUpWaveUpperSpreadHalfWidth; ++dx) {
+                if (dx == 0) {
+                    continue;
+                }
+
+                const game::Position sidePosition(upWaveCast.origin.x + dx, upWaveCast.origin.y + dy);
+                if (!isInsidePlayableArea(gameplayMap, sidePosition) || tileAt(gameplayMap, sidePosition) == '=') {
+                    continue;
+                }
+                cells.push_back(sidePosition);
+            }
+        }
     }
 
     if (includeCrown) {
-        for (int dx = -1; dx <= 1; ++dx) {
-            const game::Position position(upWaveCast.origin.x + dx, upWaveCast.origin.y - 4);
+        const int crownY = upWaveCast.origin.y - (kUpWaveVerticalReach - 1);
+        for (int dx = -kUpWaveCrownHalfWidth; dx <= kUpWaveCrownHalfWidth; ++dx) {
+            const game::Position position(upWaveCast.origin.x + dx, crownY);
             if (!isInsidePlayableArea(gameplayMap, position) || tileAt(gameplayMap, position) == '=') {
                 continue;
             }
@@ -1552,15 +1633,29 @@ std::vector<game::Position> Player::buildUpWaveDamageCells(const std::string& ga
     return cells;
 }
 
-std::vector<game::Position> Player::buildDownSlamDamageCells() const {
+std::vector<game::Position> Player::buildDownSlamDamageCells(const std::string& gameplayMap) const {
     std::vector<game::Position> cells;
 
     for (int y = downSlamCast.origin.y + 1; y <= downSlamCast.impact.y - 1; ++y) {
-        cells.push_back(game::Position(downSlamCast.origin.x, y));
+        const game::Position columnCell(downSlamCast.origin.x, y);
+        if (isInsidePlayableArea(gameplayMap, columnCell)) {
+            cells.push_back(columnCell);
+        }
     }
 
-    for (int dx = -1; dx <= 1; ++dx) {
-        cells.push_back(game::Position(downSlamCast.impact.x + dx, downSlamCast.impact.y));
+    const int upperBlastY = downSlamCast.impact.y - 1;
+    for (int dx = -kDownSlamUpperBlastHalfWidth; dx <= kDownSlamUpperBlastHalfWidth; ++dx) {
+        const game::Position upperBlastCell(downSlamCast.impact.x + dx, upperBlastY);
+        if (isInsidePlayableArea(gameplayMap, upperBlastCell) && tileAt(gameplayMap, upperBlastCell) != '=') {
+            cells.push_back(upperBlastCell);
+        }
+    }
+
+    for (int dx = -kDownSlamImpactHalfWidth; dx <= kDownSlamImpactHalfWidth; ++dx) {
+        const game::Position impactCell(downSlamCast.impact.x + dx, downSlamCast.impact.y);
+        if (isInsidePlayableArea(gameplayMap, impactCell) && tileAt(gameplayMap, impactCell) != '=') {
+            cells.push_back(impactCell);
+        }
     }
 
     return cells;

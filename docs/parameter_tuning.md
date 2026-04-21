@@ -49,6 +49,8 @@
 | 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
 | player | 灵魂获取 | soul_gain_per_nail_hit_per_enemy | 11 | 灵魂 | 用骨钉击中敌人时，每命中一个敌人获得的灵魂量 |
+| player | 灵魂获取 | soul_gain_per_upslash_hit_per_enemy | 11 | 灵魂 | 向上劈命中敌人时，同样回 11 点灵魂 |
+| player | 灵魂获取 | soul_gain_per_downslash_hit_per_enemy | 11 | 灵魂 | 向下劈命中敌人时，同样回 11 点灵魂 |
 | player | 灵魂容量 | soul_meter_max | 99 | 灵魂 | 主灵魂计可容纳的最大灵魂量 |
 | player | 灵魂消耗 | spell_cast_soul_cost | 33 | 灵魂 | 施放法术消耗的灵魂量 |
 | player | 灵魂消耗 | heal_focus_soul_cost | 33 | 灵魂 | 凝聚回血消耗的灵魂量 |
@@ -57,6 +59,7 @@
 
 - 灵魂可用于施放伤害性法术，也可用于治疗。
 - 灵魂在 HUD 上以圆形仪表盘显示。
+- 当前上劈 / 下劈命中也按普通骨钉命中处理，会回 11 点灵魂。
 
 ## 5.1 NPC / 商店参数
 
@@ -103,12 +106,19 @@
 | player | 法术伤害 | spell_horizontal_damage | 15 | 伤害 | 普通法术向左/右攻击伤害 |
 | player | 法术伤害 | spell_down_damage | 20 | 伤害 | 普通法术向下攻击伤害 |
 | player | 法术伤害 | spell_up_damage | 22 | 伤害 | 普通法术向上攻击伤害 |
+| player | 法术判定 | spell_up_vertical_reach | 5 | 格 | 向上法术的主伤害柱维持 5 格高度，不额外拉长 |
+| player | 法术判定 | spell_up_upper_spread_half_width | 1 | 格 | 向上法术中上段当前向左右各扩 1 格横向判定 |
+| player | 法术判定 | spell_up_crown_half_width | 2 | 格 | 向上法术顶端炸冠当前向左右各扩 2 格 |
+| player | 法术判定 | spell_down_upper_blast_half_width | 1 | 格 | 向下法术落地前一行的扩散当前向左右各扩 1 格 |
+| player | 法术判定 | spell_down_impact_half_width | 2 | 格 | 向下法术落地点当前向左右各扩 2 格 |
 
 ## 9. 攻击伤害附带规则
 
 - 骨钉共有三级伤害档位：5、9、13。
 - 后两级骨钉可在铁匠处升级获得。
 - 当前项目起始骨钉伤害直接按 5 点处理。
+- 当前向上法术保持原本 5 格高度，但把中上段横向外扩到 3 格宽，顶部炸冠扩到 5 格宽。
+- 当前向下法术在原本下坠柱基础上，额外覆盖落地点上一行的 3 格和落地点本行的 5 格。
 
 ## 10. 地面普通敌人参数
 
@@ -227,3 +237,18 @@
 - `~` 统一表示浮空波动 / 法力扰动 / 狂怒法涌。
 - `o` 在飞行 Boss 上统一表示小头部 / 核心眼。
 - `|` 在飞行 Boss 上统一表示法杖 / 纵向躯干。
+
+## 20. 2026-04-21 战斗手感回归记录
+
+| 项目 | 当前仓库状态 | 当前实现 / 证据 | 结论 |
+| --- | --- | --- | --- |
+| `g` 地面敌人冲刺后贴地 | 未通过 | `GroundEnemy::DashAttack` 与 `AttackRecovery` 路径当前没有统一把 `position.y` 贴回 `spawnPosition.y`；只有 `Idle` / `ReturnToPost` 分支明确重置高度 | 仍需 `Enemy.*` 继续修 |
+| 上劈 / 下劈命中加 Soul | 已通过 | `Player.cpp` 当前已在上劈 / 下劈命中分支同步执行 `stats.soul.current = min(... + 11)`，与横斩收益规则保持一致 | 当前仓库已落地 |
+| 向上法术判定范围 | 已通过 | 当前向上法术伤害格为自角色上方开始的 5 格纵向列，终段再追加 3 格 crown（`dx = -1..1`） | 已较旧版明显放大 |
+| 向下法术判定范围 | 已通过 | 当前向下法术伤害格为从起点到落点前的整段纵向列，再加落地点 3 格横向爆点（`dx = -1..1`） | 已较旧版明显放大 |
+
+### 20.1 回归说明
+
+- 本轮文档位只做回归验证和记录，不越界改 `Player.*`、`Enemy.*`、`CombatSystem.*`。
+- 复核时已重新编译 `player_sandbox.exe`、`enemy_sandbox.exe` 和 `testcpp1_validation.exe`，确保上述结论对应当前可编译仓库状态。
+- 因此，本轮 3 个战斗手感问题的当前结果是：**2 项已通过（上下法术范围放大、上下劈砍 Soul），1 项仍待代码线补完（地面敌人贴地）**。

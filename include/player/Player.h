@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "combat/CombatSystem.h"
 #include "input/KeyStateManager.h"
 #include "shared/GameTypes.h"
 
@@ -14,7 +15,7 @@ class GroundEnemy;
 class FlyingEnemy;
 }
 
-class Player {
+class Player : public game::CombatActor {
 public:
     explicit Player(KeyStateManager& keyStateManager);
 
@@ -30,12 +31,18 @@ public:
 
     bool isMovementLocked() const;
     bool isVisible() const;
-    bool isAlive() const;
+    bool isAlive() const override;
     bool consumeResetRequest();
 
-    const game::CharacterStats& getStats() const;
+    const std::string& getId() const override;
+    game::Position getPosition() const override;
+    const game::CharacterStats& getStats() const override;
+    game::CharacterStats& accessStats() override;
+    game::HitFeedbackState& accessHitFeedback() override;
+    void takeDamage(const game::DamageInfo& damageInfo) override;
     void restoreSavedStats(const game::CharacterStats& savedStats);
-    game::FacingDirection getFacingDirection() const;
+    game::FacingDirection getFacingDirection() const override;
+    void setCombatPosition(const game::Position& position);
     void setDoubleJumpUnlocked(bool unlocked);
     bool hasDoubleJumpUnlocked() const;
 
@@ -171,6 +178,8 @@ private:
     };
 
     KeyStateManager& ksm;
+    std::string id;
+    game::Position combatPosition;
     bool isJumping;
     bool jumpHeldLastFrame;
     bool doubleJumpUnlocked;
@@ -210,6 +219,13 @@ private:
     bool wasKeyDown(int keyCode) const;
     bool isJustPressed(int keyCode) const;
     bool canSpendSoul(int soulCost);
+    void applyIncomingDamage(const game::DamageInfo& damageInfo,
+                             const game::Position& playerPosition);
+    void applyCombatReward(const game::RewardResolution& reward,
+                           const game::CombatSystem& combatSystem);
+    bool applyEnemyCombatResolution(const game::Enemy& enemy,
+                                    const game::DamageResolution& resolution,
+                                    const game::CombatSystem& combatSystem);
 
     void updateFacingFromInput();
     void updateBlink();
@@ -239,24 +255,16 @@ private:
     int meleeVisualStage() const;
     int deathExpansionRadius() const;
 
-    bool isEnemyInMeleeRange(const game::Position& playerPosition,
-                             const game::Position& enemyPosition) const;
-    bool applyDamageToEnemyAtPosition(game::Enemy& enemy,
-                                      const game::Position& targetPosition,
-                                      const game::DamageInfo& damageInfo);
-    bool applyDamageToEnemyInMeleeRange(game::Enemy& enemy,
-                                        const game::Position& playerPosition,
-                                        const game::DamageInfo& damageInfo);
-    void grantKillReward(int amount);
     game::Position findDownSlamImpactPosition(const std::string& gameplayMap,
                                               const game::Position& origin) const;
 
     std::vector<SpellVisualCell> buildHorizontalWaveVisualCells(const VisualProjectile& projectile) const;
     std::vector<SpellVisualCell> buildUpWaveVisualCells() const;
     std::vector<SpellVisualCell> buildDownSlamVisualCells() const;
+    std::vector<SpellVisualCell> buildDashVisualCells() const;
     std::vector<SpellVisualCell> buildMeleeVisualCells() const;
     std::vector<game::Position> buildUpWaveDamageCells(const std::string& gameplayMap, bool includeCrown) const;
-    std::vector<game::Position> buildDownSlamDamageCells() const;
+    std::vector<game::Position> buildDownSlamDamageCells(const std::string& gameplayMap) const;
 
     std::vector<std::string> buildSoulVesselLines() const;
     std::string buildHealthOrbLine() const;

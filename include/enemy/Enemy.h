@@ -140,6 +140,8 @@ public:
 
 private:
     void updateHitFeedback(float deltaSeconds);
+    void snapToGroundPlane();
+    void enterAttackRecovery();
     void moveTowardX(int targetX, float deltaSeconds);
     void startAttack();
     void startDashAttack(const Position& playerPosition);
@@ -172,6 +174,7 @@ private:
     float deathMarkerSeconds;
     float deathAnimationRemaining;
     int dashStepsRemaining;
+    int groundPlaneY;
     int patrolDirection;
     float dashAccumulator;
 };

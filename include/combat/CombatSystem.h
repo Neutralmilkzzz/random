@@ -33,6 +33,9 @@ struct AttackDefinition {
     float recoverySeconds = 0.0f;
     int knockbackX = 0;
     int knockbackY = 0;
+    int horizontalReach = 0;
+    int verticalTolerance = 0;
+    bool directional = false;
 };
 
 struct DamageResolution {
@@ -63,11 +66,52 @@ public:
     void registerProjectile(Projectile* projectile);
     void update(float deltaSeconds);
     bool canResolveHeal(const CombatActor& actor, float secondsSinceLastHit) const;
+    bool isTargetAtPosition(const Position& targetPosition, const Position& attackPosition) const;
+    bool isTargetInCells(const Position& targetPosition, const std::vector<Position>& attackCells) const;
+    bool isTargetInRange(const Position& originPosition,
+                         const Position& targetPosition,
+                         int horizontalReach,
+                         int verticalTolerance) const;
+    bool isTargetInFrontRange(const CombatActor& attacker,
+                              const Position& targetPosition,
+                              int horizontalReach,
+                              int verticalTolerance = 1) const;
+    bool isTargetInVerticalRange(const CombatActor& attacker,
+                                 const Position& targetPosition,
+                                 bool aimingUp,
+                                 int horizontalTolerance = 1,
+                                 int minVerticalDistance = 1,
+                                 int maxVerticalDistance = 2) const;
     DamageResolution resolveAttack(CombatActor& target, const AttackDefinition& attackDefinition) const;
+    DamageResolution resolveAttackAtPosition(CombatActor& target,
+                                             const Position& attackPosition,
+                                             const AttackDefinition& attackDefinition) const;
+    DamageResolution resolveAttackInCells(CombatActor& target,
+                                          const std::vector<Position>& attackCells,
+                                          const AttackDefinition& attackDefinition) const;
+    DamageResolution resolveAttackInRange(CombatActor& target,
+                                          const Position& originPosition,
+                                          const AttackDefinition& attackDefinition,
+                                          int horizontalReach,
+                                          int verticalTolerance) const;
+    DamageResolution resolveAttackInFrontRange(const CombatActor& attacker,
+                                               CombatActor& target,
+                                               const AttackDefinition& attackDefinition,
+                                               int horizontalReach,
+                                               int verticalTolerance = 1) const;
+    DamageResolution resolveAttackInVerticalRange(const CombatActor& attacker,
+                                                  CombatActor& target,
+                                                  const AttackDefinition& attackDefinition,
+                                                  bool aimingUp,
+                                                  int horizontalTolerance = 1,
+                                                  int minVerticalDistance = 1,
+                                                  int maxVerticalDistance = 2) const;
     DamageResolution resolveDamage(CombatActor& target,
                                    const DamageInfo& damageInfo,
                                    int soulGainOnHit = 0) const;
     RewardResolution buildEnemyReward(const Enemy& enemy) const;
+    RewardResolution buildEnemyRewardOnDefeat(const Enemy& enemy,
+                                              const DamageResolution& damageResolution) const;
     void applyReward(CharacterStats& recipient, const RewardResolution& reward) const;
     void openTimedWindow(TimedWindow& window, float durationSeconds) const;
     void advanceTimedWindow(TimedWindow& window, float deltaSeconds) const;

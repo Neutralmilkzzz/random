@@ -729,15 +729,14 @@ BossImpact toBossImpact(const game::BossAttackVisual& visual) {
 }
 
 void applyBossImpactIfPlayerInside(const BossImpact& impact,
-                                   const game::Position& playerPosition,
-                                   Player& player) {
-    for (size_t index = 0; index < impact.damageCells.size(); ++index) {
-        if (impact.damageCells[index].x == playerPosition.x &&
-            impact.damageCells[index].y == playerPosition.y) {
-            player.receiveDamage(impact.label.empty() ? "Boss attack" : impact.label, playerPosition);
-            return;
-        }
-    }
+                                   Player& player,
+                                   const game::CombatSystem& combatSystem) {
+    game::AttackDefinition attack;
+    attack.damage = game::DamageInfo(1,
+                                     game::DamageType::Contact,
+                                     impact.label.empty() ? "Boss attack" : impact.label,
+                                     true);
+    combatSystem.resolveAttackInCells(player, impact.damageCells, attack);
 }
 
 void updateBossImpacts(BossEncounterState& bossEncounter) {
@@ -768,7 +767,8 @@ void resolveBossSignal(const std::string& terrainMap,
                        BossEncounterState& bossEncounter,
                        const game::BossAttackSignal& signal,
                        RuntimeState& state,
-                       Player& player) {
+                       Player& player,
+                       const game::CombatSystem& combatSystem) {
     const game::BossAttackVisual attackVisual = bossEncounter.boss.buildResolvedAttackVisual(signal);
     if (attackVisual.activeGlyphs.empty() &&
         attackVisual.fadeGlyphs.empty() &&
@@ -777,7 +777,7 @@ void resolveBossSignal(const std::string& terrainMap,
     }
 
     BossImpact impact = toBossImpact(attackVisual);
-    applyBossImpactIfPlayerInside(impact, playerPosition, player);
+    applyBossImpactIfPlayerInside(impact, player, combatSystem);
     bossEncounter.impacts.push_back(impact);
 
     if (attackVisual.hasLandingPosition &&
@@ -795,55 +795,6 @@ void resolveBossSignal(const std::string& terrainMap,
     } else if (signal.type == game::BossAttackType::JumpSlash) {
         state.lastInteraction = bossEncounter.bossName + " crashed down with a jump slash.";
     }
-}
-
-bool isBossInFrontRange(const game::Position& playerPosition,
-                        const game::Position& bossPosition,
-                        game::FacingDirection facingDirection,
-                        int range) {
-    const int deltaX = bossPosition.x - playerPosition.x;
-    const int deltaY = std::abs(bossPosition.y - playerPosition.y);
-    if (deltaY > 1) {
-        return false;
-    }
-
-    if (facingDirection == game::FacingDirection::Right) {
-        return deltaX >= 1 && deltaX <= range;
-    }
-
-    return deltaX <= -1 && deltaX >= -range;
-}
-
-bool isBossInVerticalSlashRange(const game::Position& playerPosition,
-                                const game::Position& bossPosition,
-                                bool aimingUp) {
-    const int deltaX = std::abs(bossPosition.x - playerPosition.x);
-    const int deltaY = bossPosition.y - playerPosition.y;
-    if (deltaX > 1) {
-        return false;
-    }
-
-    if (aimingUp) {
-        return deltaY <= -1 && deltaY >= -2;
-    }
-
-    return deltaY >= 1 && deltaY <= 2;
-}
-
-bool isBossInVerticalSpellRange(const game::Position& playerPosition,
-                                const game::Position& bossPosition,
-                                bool aimingUp) {
-    const int deltaX = std::abs(bossPosition.x - playerPosition.x);
-    const int deltaY = bossPosition.y - playerPosition.y;
-    if (deltaX > 1) {
-        return false;
-    }
-
-    if (aimingUp) {
-        return deltaY < 0 && deltaY >= -kBossVerticalSpellRange;
-    }
-
-    return deltaY > 0 && deltaY <= kBossVerticalSpellRange;
 }
 
 void initializeBossEncounter(const game::MapDefinition& mapDefinition,
@@ -1181,6 +1132,7 @@ void tryResolvePlayerHitOnBoss(const game::Position& playerPosition,
                                game::SaveData& saveData,
                                game::GameSession& gameSession,
                                game::SaveSystem& saveSystem,
+                               const game::CombatSystem& combatSystem,
                                const KeyStateManager& keyStateManager,
                                BossEncounterState& bossEncounter) {
     if (!bossEncounter.active ||
@@ -1198,10 +1150,8 @@ void tryResolvePlayerHitOnBoss(const game::Position& playerPosition,
                                  isJustPressed(keyStateManager, state.previousKeys, 'J');
     const bool spellPressed = isJustPressed(keyStateManager, state.previousKeys, 'k') ||
                               isJustPressed(keyStateManager, state.previousKeys, 'K');
-    const game::Position bossPosition = bossEncounter.boss.getPosition();
-
     game::AttackDefinition attack;
-    bool shouldResolve = false;
+    game::DamageResolution resolution;
 
     if (physicalPressed) {
         attack.damage = game::DamageInfo(1,
@@ -1213,12 +1163,21 @@ void tryResolvePlayerHitOnBoss(const game::Position& playerPosition,
         attack.soulGainOnHit = (!aimingUp && !aimingDown) ? 11 : 0;
 
         if (aimingUp || aimingDown) {
-            shouldResolve = isBossInVerticalSlashRange(playerPosition, bossPosition, aimingUp);
+            resolution = combatSystem.resolveAttackInVerticalRange(
+                    player,
+                    bossEncounter.boss,
+                    attack,
+                    aimingUp,
+                    1,
+                    1,
+                    2);
         } else {
-            shouldResolve = isBossInFrontRange(playerPosition,
-                                               bossPosition,
-                                               player.getFacingDirection(),
-                                               kBossMeleeRange);
+            resolution = combatSystem.resolveAttackInFrontRange(
+                    player,
+                    bossEncounter.boss,
+                    attack,
+                    kBossMeleeRange,
+                    1);
         }
     } else if (spellPressed && player.getStats().soul.current < statsBeforeCombat.soul.current) {
         attack.damage = game::DamageInfo(1,
@@ -1229,21 +1188,24 @@ void tryResolvePlayerHitOnBoss(const game::Position& playerPosition,
                                          false);
 
         if (aimingUp || aimingDown) {
-            shouldResolve = isBossInVerticalSpellRange(playerPosition, bossPosition, aimingUp);
+            resolution = combatSystem.resolveAttackInVerticalRange(
+                    player,
+                    bossEncounter.boss,
+                    attack,
+                    aimingUp,
+                    1,
+                    1,
+                    kBossVerticalSpellRange);
         } else {
-            shouldResolve = isBossInFrontRange(playerPosition,
-                                               bossPosition,
-                                               player.getFacingDirection(),
-                                               kBossHorizontalWaveRange);
+            resolution = combatSystem.resolveAttackInFrontRange(
+                    player,
+                    bossEncounter.boss,
+                    attack,
+                    kBossHorizontalWaveRange,
+                    1);
         }
     }
 
-    if (!shouldResolve) {
-        return;
-    }
-
-    game::CombatSystem combatSystem;
-    const game::DamageResolution resolution = combatSystem.resolveAttack(bossEncounter.boss, attack);
     if (!resolution.hitApplied) {
         return;
     }
@@ -1381,9 +1343,9 @@ void spawnFlyingProjectile(const game::FlyingEnemy& enemy,
 }
 
 void updateEnemyProjectiles(const std::string& terrainMap,
-                            const game::Position& playerPosition,
                             std::vector<EnemyProjectile>& enemyProjectiles,
-                            Player& player) {
+                            Player& player,
+                            const game::CombatSystem& combatSystem) {
     std::vector<EnemyProjectile> nextProjectiles;
     nextProjectiles.reserve(enemyProjectiles.size());
 
@@ -1410,8 +1372,9 @@ void updateEnemyProjectiles(const std::string& terrainMap,
             continue;
         }
 
-        if (projectile.position.x == playerPosition.x && projectile.position.y == playerPosition.y) {
-            player.receiveDamage("Flying fireball", playerPosition);
+        game::AttackDefinition attack;
+        attack.damage = game::DamageInfo(1, game::DamageType::Fireball, "Flying fireball", false);
+        if (combatSystem.resolveAttackAtPosition(player, projectile.position, attack).hitApplied) {
             continue;
         }
 
@@ -1457,6 +1420,7 @@ int main() {
     std::vector<game::FlyingEnemy> flyingEnemies;
     std::vector<EnemyProjectile> enemyProjectiles;
     BossEncounterState bossEncounter;
+    game::CombatSystem combatSystem;
     game::GroundEnemy dummyGroundEnemy("dummy_ground", game::Position(-100, -100));
     game::FlyingEnemy dummyFlyingEnemy("dummy_flying", game::Position(-100, -100));
     game::MapDefinition currentMapDefinition;
@@ -1658,6 +1622,7 @@ int main() {
 
         std::string gameplayMap = terrainMap;
         placeGlyph(gameplayMap, playerPosition, '@');
+        player.setCombatPosition(playerPosition);
 
         const int activeGroundEnemyIndex = findClosestGroundEnemyIndex(groundEnemies, playerPosition);
         const int activeFlyingEnemyIndex = findClosestFlyingEnemyIndex(flyingEnemies, playerPosition);
@@ -1687,6 +1652,7 @@ int main() {
                                       saveData,
                                       gameSession,
                                       saveSystem,
+                                      combatSystem,
                                       keyStateManager,
                                       bossEncounter);
         }
@@ -1709,10 +1675,13 @@ int main() {
             }
 
             if (player.isAlive() && groundEnemies[index].consumeAttackTrigger()) {
-                if (groundEnemies[index].isTouchingPlayer(playerPosition) ||
-                    groundEnemies[index].isInAttackRange(playerPosition)) {
-                    player.receiveDamage("Ground enemy", playerPosition);
-                }
+                game::AttackDefinition attack = groundEnemies[index].getPrimaryAttack();
+                attack.damage.sourceId = "Ground enemy";
+                combatSystem.resolveAttackInRange(player,
+                                                  groundEnemies[index].getPosition(),
+                                                  attack,
+                                                  attack.horizontalReach,
+                                                  attack.verticalTolerance);
             }
         }
 
@@ -1738,7 +1707,7 @@ int main() {
             }
         }
 
-        updateEnemyProjectiles(terrainMap, playerPosition, enemyProjectiles, player);
+        updateEnemyProjectiles(terrainMap, enemyProjectiles, player, combatSystem);
         removeDefeatedEnemies(groundEnemies, flyingEnemies);
         updateBossImpacts(bossEncounter);
         if (bossEncounter.active && bossEncounter.battleActive && !bossEncounter.victoryActive) {
@@ -1753,7 +1722,7 @@ int main() {
 
             game::BossAttackSignal signal;
             if (bossEncounter.boss.consumeAttackSignal(signal)) {
-                resolveBossSignal(terrainMap, playerPosition, bossEncounter, signal, state, player);
+                resolveBossSignal(terrainMap, playerPosition, bossEncounter, signal, state, player, combatSystem);
             }
         }
         gameSession.update(static_cast<float>(kFrameMs) / 1000.0f);

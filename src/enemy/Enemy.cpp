@@ -427,6 +427,7 @@ GroundEnemy::GroundEnemy(const std::string& enemyId, const Position& initialSpaw
       deathMarkerSeconds(0.07f),
       deathAnimationRemaining(0.0f),
       dashStepsRemaining(0),
+      groundPlaneY(initialSpawnPosition.y),
       patrolDirection(1),
       dashAccumulator(0.0f) {
     stats.health.current = 3;
@@ -480,6 +481,7 @@ void GroundEnemy::takeDamage(const DamageInfo& damageInfo) {
         idlePauseRemaining = 0.0f;
         deathAnimationRemaining = deathFlashSeconds + deathMarkerSeconds;
         dashStepsRemaining = 0;
+        groundPlaneY = spawnPosition.y;
         patrolDirection = 1;
         dashAccumulator = 0.0f;
     }
@@ -538,10 +540,8 @@ void GroundEnemy::updateAI(const Position& playerPosition, float deltaSeconds) {
 
             if (isTouchingPlayer(playerPosition)) {
                 attackTriggerQueued = true;
-                state = GroundEnemyState::AttackRecovery;
-                attackRecoveryRemaining = attackRecoverySeconds;
                 dashStepsRemaining = 0;
-                dashAccumulator = 0.0f;
+                enterAttackRecovery();
                 return;
             }
         }
@@ -550,14 +550,13 @@ void GroundEnemy::updateAI(const Position& playerPosition, float deltaSeconds) {
             if (isInAttackRange(playerPosition)) {
                 attackTriggerQueued = true;
             }
-            state = GroundEnemyState::AttackRecovery;
-            attackRecoveryRemaining = attackRecoverySeconds;
-            dashAccumulator = 0.0f;
+            enterAttackRecovery();
         }
         return;
     }
 
     if (state == GroundEnemyState::AttackRecovery) {
+        snapToGroundPlane();
         attackRecoveryRemaining -= deltaSeconds;
         if (attackRecoveryRemaining <= 0.0f) {
             attackRecoveryRemaining = 0.0f;
@@ -577,7 +576,8 @@ void GroundEnemy::updateAI(const Position& playerPosition, float deltaSeconds) {
     }
 
     if (state == GroundEnemyState::Idle) {
-        position.y = spawnPosition.y;
+        groundPlaneY = spawnPosition.y;
+        snapToGroundPlane();
 
         if (idlePauseRemaining > 0.0f) {
             idlePauseRemaining -= deltaSeconds;
@@ -599,6 +599,8 @@ void GroundEnemy::updateAI(const Position& playerPosition, float deltaSeconds) {
     }
 
     if (state == GroundEnemyState::ReturnToPost) {
+        groundPlaneY = spawnPosition.y;
+        snapToGroundPlane();
         if (position.x == spawnPosition.x && position.y == spawnPosition.y) {
             state = GroundEnemyState::Idle;
             moveAccumulator = 0.0f;
@@ -607,7 +609,7 @@ void GroundEnemy::updateAI(const Position& playerPosition, float deltaSeconds) {
         }
 
         moveTowardX(spawnPosition.x, deltaSeconds);
-        position.y = spawnPosition.y;
+        snapToGroundPlane();
 
         if (position.x == spawnPosition.x && position.y == spawnPosition.y) {
             state = GroundEnemyState::Idle;
@@ -617,6 +619,7 @@ void GroundEnemy::updateAI(const Position& playerPosition, float deltaSeconds) {
     }
 
     if (state == GroundEnemyState::Chase) {
+        snapToGroundPlane();
         if (absX > loseAggroRange) {
             state = GroundEnemyState::ReturnToPost;
             return;
@@ -639,6 +642,9 @@ AttackDefinition GroundEnemy::getPrimaryAttack() const {
     attack.activeSeconds = 0.12f;
     attack.recoverySeconds = attackRecoverySeconds;
     attack.knockbackX = facingDirection == FacingDirection::Right ? 1 : -1;
+    attack.horizontalReach = static_cast<int>(attackRange);
+    attack.verticalTolerance = 0;
+    attack.directional = false;
     return attack;
 }
 
@@ -648,6 +654,7 @@ int GroundEnemy::getHkdReward() const {
 
 void GroundEnemy::setPosition(const Position& newPosition) {
     position = newPosition;
+    groundPlaneY = newPosition.y;
 }
 
 void GroundEnemy::setSpawnPosition(const Position& newSpawnPosition) {
@@ -738,6 +745,17 @@ void GroundEnemy::updateHitFeedback(float deltaSeconds) {
     }
 }
 
+void GroundEnemy::snapToGroundPlane() {
+    position.y = groundPlaneY;
+}
+
+void GroundEnemy::enterAttackRecovery() {
+    state = GroundEnemyState::AttackRecovery;
+    attackRecoveryRemaining = attackRecoverySeconds;
+    dashAccumulator = 0.0f;
+    snapToGroundPlane();
+}
+
 void GroundEnemy::moveTowardX(int targetX, float deltaSeconds) {
     if (position.x == targetX) {
         moveAccumulator = 0.0f;
@@ -759,6 +777,7 @@ void GroundEnemy::startAttack() {
     state = GroundEnemyState::AttackStartup;
     attackStartupRemaining = attackStartupSeconds;
     attackTriggerQueued = false;
+    groundPlaneY = position.y;
     moveAccumulator = 0.0f;
     dashStepsRemaining = 0;
     dashAccumulator = 0.0f;
@@ -767,6 +786,11 @@ void GroundEnemy::startAttack() {
 void GroundEnemy::startDashAttack(const Position& playerPosition) {
     const int deltaX = playerPosition.x - position.x;
     facingDirection = deltaX < 0 ? FacingDirection::Left : FacingDirection::Right;
+    if (playerPosition.y > position.y) {
+        groundPlaneY = std::min(playerPosition.y, position.y + 2);
+    } else {
+        groundPlaneY = position.y;
+    }
     state = GroundEnemyState::DashAttack;
     dashStepsRemaining = std::max(3, std::min(5, std::abs(deltaX)));
     dashAccumulator = 0.0f;
