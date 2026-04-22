@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "combat/CombatTuning.h"
+
 namespace {
 
 const char* kSaveFilePath = "data/save_slot_01.sav";
@@ -91,7 +93,7 @@ void writeSaveFile(const game::SaveData& saveData) {
     output << "soul_current=" << saveData.playerStats.soul.current << "\n";
     output << "soul_max=" << saveData.playerStats.soul.maximum << "\n";
     output << "hkd=" << saveData.playerStats.hkd << "\n";
-    output << "attack_power=" << saveData.playerStats.attackPower << "\n";
+    output << "attack_power=" << game::clampPlayerAttackPowerLevel(saveData.playerStats.attackPower) << "\n";
     output << "attack_speed_level=" << saveData.playerStats.attackSpeedLevel << "\n";
     output << "purchased_health_slots=" << saveData.playerStats.purchasedHealthSlots << "\n";
     output << "completion_time=" << saveData.completionTimeSeconds << "\n";
@@ -160,7 +162,7 @@ SaveData SaveSystem::load() const {
         } else if (key == "hkd") {
             saveData.playerStats.hkd = toInt(value);
         } else if (key == "attack_power") {
-            saveData.playerStats.attackPower = toInt(value);
+            saveData.playerStats.attackPower = clampPlayerAttackPowerLevel(toInt(value));
         } else if (key == "attack_speed_level") {
             saveData.playerStats.attackSpeedLevel = toInt(value);
         } else if (key == "purchased_health_slots") {
@@ -186,6 +188,8 @@ SaveData SaveSystem::load() const {
             }
         }
     }
+
+    clampPlayerAttackPower(saveData.playerStats);
 
     return saveData;
 }

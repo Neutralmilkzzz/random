@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "combat/CombatSystem.h"
+#include "combat/CombatTuning.h"
 #include "enemy/Enemy.h"
 #include "input/KeyStateManager.h"
 #include "player/Player.h"
@@ -752,7 +753,10 @@ int main() {
         if (isJustPressed(keyStateManager, state, 'h') || isJustPressed(keyStateManager, state, 'H')) {
             game::AttackDefinition lightHit;
             lightHit.id = "sandbox_light_hit";
-            lightHit.damage = game::DamageInfo(1, game::DamageType::BasicAttack, "boss_sandbox_player", true);
+            lightHit.damage = game::DamageInfo(game::kBaseNailDamage,
+                                               game::DamageType::BasicAttack,
+                                               "boss_sandbox_player",
+                                               true);
             lightHit.soulGainOnHit = 11;
             hitBoss(boss, state, lightHit, "Light hit");
         }
@@ -760,7 +764,10 @@ int main() {
         if (isJustPressed(keyStateManager, state, 'j') || isJustPressed(keyStateManager, state, 'J')) {
             game::AttackDefinition heavyHit;
             heavyHit.id = "sandbox_heavy_hit";
-            heavyHit.damage = game::DamageInfo(2, game::DamageType::SoulWaveHorizontal, "boss_sandbox_player", false);
+            heavyHit.damage = game::DamageInfo(game::kSpellDamage,
+                                               game::DamageType::SoulWaveHorizontal,
+                                               "boss_sandbox_player",
+                                               false);
             heavyHit.soulGainOnHit = 18;
             hitBoss(boss, state, heavyHit, "Heavy hit");
         }

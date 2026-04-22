@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "combat/CombatTuning.h"
 #include "core/GameSession.h"
 #include "enemy/Enemy.h"
 #include "input/KeyStateManager.h"
@@ -1221,13 +1222,14 @@ void tryResolvePlayerHitOnBoss(const game::Position& playerPosition,
     game::DamageResolution resolution;
 
     if (physicalPressed) {
-        attack.damage = game::DamageInfo(1,
-                                         aimingUp ? game::DamageType::UpSlash
-                                                  : (aimingDown ? game::DamageType::DownSlash
-                                                                : game::DamageType::BasicAttack),
+        const game::DamageType damageType = aimingUp ? game::DamageType::UpSlash
+                                                     : (aimingDown ? game::DamageType::DownSlash
+                                                                   : game::DamageType::BasicAttack);
+        attack.damage = game::DamageInfo(game::getPlayerAttackDamage(player.getStats(), damageType),
+                                         damageType,
                                          "player",
                                          true);
-        attack.soulGainOnHit = (!aimingUp && !aimingDown) ? 11 : 0;
+        attack.soulGainOnHit = 11;
 
         if (aimingUp || aimingDown) {
             resolution = combatSystem.resolveAttackInVerticalRange(
@@ -1247,10 +1249,11 @@ void tryResolvePlayerHitOnBoss(const game::Position& playerPosition,
                     1);
         }
     } else if (spellPressed && player.getStats().soul.current < statsBeforeCombat.soul.current) {
-        attack.damage = game::DamageInfo(1,
-                                         aimingUp ? game::DamageType::SoulWaveUp
-                                                  : (aimingDown ? game::DamageType::SoulSlam
-                                                                : game::DamageType::SoulWaveHorizontal),
+        const game::DamageType damageType = aimingUp ? game::DamageType::SoulWaveUp
+                                                     : (aimingDown ? game::DamageType::SoulSlam
+                                                                   : game::DamageType::SoulWaveHorizontal);
+        attack.damage = game::DamageInfo(game::getPlayerAttackDamage(player.getStats(), damageType),
+                                         damageType,
                                          "player",
                                          false);
 
@@ -1275,6 +1278,12 @@ void tryResolvePlayerHitOnBoss(const game::Position& playerPosition,
 
     if (!resolution.hitApplied) {
         return;
+    }
+
+    if (resolution.soulGranted > 0) {
+        game::RewardResolution soulReward;
+        soulReward.soulGranted = resolution.soulGranted;
+        combatSystem.applyReward(player.accessStats(), soulReward);
     }
 
     if (resolution.targetDefeated) {

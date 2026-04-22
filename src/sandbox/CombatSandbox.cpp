@@ -1,11 +1,12 @@
 #include <iostream>
 
+#include "combat/CombatTuning.h"
 #include "combat/CombatSystem.h"
 
 int main() {
     game::AttackDefinition basicAttack;
     basicAttack.id = "player_basic_attack";
-    basicAttack.damage = game::DamageInfo(1, game::DamageType::BasicAttack, "player", true);
+    basicAttack.damage = game::DamageInfo(game::kBaseNailDamage, game::DamageType::BasicAttack, "player", true);
     basicAttack.soulGainOnHit = 11;
     basicAttack.startupSeconds = 0.10f;
     basicAttack.activeSeconds = 0.12f;

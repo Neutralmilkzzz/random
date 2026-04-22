@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <sstream>
 
+#include "combat/CombatTuning.h"
 #include "enemy/Enemy.h"
 
 namespace {
@@ -43,7 +44,6 @@ const int kDeathTextFrames = 60;
 const int kSoulMeterMax = 99;
 const int kSoulGainOnMeleeHit = 11;
 const int kSoulSkillCost = 33;
-const int kPlayerAttackDamage = 1;
 const int kSoulFillUnits = 3;
 
 int digitCount(int value) {
@@ -170,6 +170,7 @@ Player::Player(KeyStateManager& keyStateManager)
       minimumJumpRiseRemaining(0.0f),
       riseVelocityDropAccumulator(0.0f),
       horizontalInputDirection(0),
+      pendingBasicAttackRecoilDirection(0),
       dashFramesRemaining(0),
       dashCooldownFrames(0),
       dashDirection(1),
@@ -205,6 +206,7 @@ void Player::resetRuntimeState() {
     minimumJumpRiseRemaining = 0.0f;
     riseVelocityDropAccumulator = 0.0f;
     horizontalInputDirection = 0;
+    pendingBasicAttackRecoilDirection = 0;
     dashFramesRemaining = 0;
     dashCooldownFrames = 0;
     dashDirection = 1;
@@ -278,6 +280,42 @@ bool Player::jumpUp(std::string& currentmap, size_t pos) {
     return false;
 }
 
+bool Player::consumeBasicAttackRecoil(std::string& currentmap) {
+    const int recoilDirection = pendingBasicAttackRecoilDirection;
+    pendingBasicAttackRecoilDirection = 0;
+    if (recoilDirection == 0) {
+        return false;
+    }
+
+    const game::Position currentPosition = findGlyphPosition(currentmap, '@');
+    if (currentPosition.x < 0 || currentPosition.y < 0) {
+        return false;
+    }
+
+    const size_t currentIndex = indexFromPosition(currentmap, currentPosition);
+    const bool grounded = isGrounded(currentmap, currentIndex);
+    const game::Position recoilPosition(currentPosition.x + recoilDirection, currentPosition.y);
+    if (!isInsidePlayableArea(currentmap, recoilPosition) ||
+        tileAt(currentmap, recoilPosition) != ' ') {
+        return false;
+    }
+
+    if (grounded) {
+        const game::Position supportPosition(recoilPosition.x, recoilPosition.y + 1);
+        if (!isInsidePlayableArea(currentmap, supportPosition) ||
+            tileAt(currentmap, supportPosition) == ' ') {
+            return false;
+        }
+    }
+
+    placeGlyph(currentmap, currentPosition, ' ');
+    placeGlyph(currentmap, recoilPosition, '@');
+    combatPosition = recoilPosition;
+    horizontalMoveAccumulator = 0.0f;
+    horizontalInputDirection = 0;
+    return true;
+}
+
 void Player::move(std::string& currentmap) {
     size_t pos = currentmap.find('@');
     if (pos == std::string::npos) {
@@ -306,6 +344,11 @@ void Player::move(std::string& currentmap) {
         if (!dashActive && dashCooldownFrames <= 0) {
             dashAvailable = true;
         }
+    }
+
+    if (consumeBasicAttackRecoil(currentmap)) {
+        jumpHeldLastFrame = jumpHeld;
+        return;
     }
 
     if (jumpJustPressed && grounded) {
@@ -538,7 +581,10 @@ void Player::updateCombat(const std::string& gameplayMap,
             startMeleeVisual(MeleeVisualType::Up, playerPosition);
             lastAction = "Up Slash";
             game::AttackDefinition attack;
-            attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, id, true);
+            attack.damage = game::DamageInfo(game::getPlayerAttackDamage(stats, game::DamageType::UpSlash),
+                                             game::DamageType::UpSlash,
+                                             id,
+                                             true);
             const bool groundHit = applyEnemyCombatResolution(
                     groundEnemy,
                     combatSystem.resolveAttackInVerticalRange(*this, groundEnemy, attack, true),
@@ -557,7 +603,10 @@ void Player::updateCombat(const std::string& gameplayMap,
             startMeleeVisual(MeleeVisualType::Down, playerPosition);
             lastAction = "Down Slash";
             game::AttackDefinition attack;
-            attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, id, true);
+            attack.damage = game::DamageInfo(game::getPlayerAttackDamage(stats, game::DamageType::DownSlash),
+                                             game::DamageType::DownSlash,
+                                             id,
+                                             true);
             const bool groundHit = applyEnemyCombatResolution(
                     groundEnemy,
                     combatSystem.resolveAttackInVerticalRange(*this, groundEnemy, attack, false),
@@ -575,8 +624,12 @@ void Player::updateCombat(const std::string& gameplayMap,
         } else {
             startMeleeVisual(MeleeVisualType::Horizontal, playerPosition);
             lastAction = "Basic Attack";
+            pendingBasicAttackRecoilDirection = facing == game::FacingDirection::Left ? 1 : -1;
             game::AttackDefinition attack;
-            attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, id, true);
+            attack.damage = game::DamageInfo(game::getPlayerAttackDamage(stats, game::DamageType::BasicAttack),
+                                             game::DamageType::BasicAttack,
+                                             id,
+                                             true);
             const bool groundHit = applyEnemyCombatResolution(
                     groundEnemy,
                     combatSystem.resolveAttackInFrontRange(*this, groundEnemy, attack, kAttackRange, 1),
@@ -704,6 +757,7 @@ void Player::takeDamage(const game::DamageInfo& damageInfo) {
 void Player::restoreSavedStats(const game::CharacterStats& savedStats) {
     resetRuntimeState();
     stats = savedStats;
+    game::clampPlayerAttackPower(stats);
     if (stats.health.maximum <= 0) {
         stats.health.maximum = 5;
     }
@@ -975,7 +1029,10 @@ void Player::updateUpWaveCast(const std::string& gameplayMap,
     if (!upWaveCast.damageResolved && stage >= 3) {
         const game::CombatSystem combatSystem;
         game::AttackDefinition attack;
-        attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulWaveUp, id, true);
+        attack.damage = game::DamageInfo(game::getPlayerAttackDamage(stats, game::DamageType::SoulWaveUp),
+                                         game::DamageType::SoulWaveUp,
+                                         id,
+                                         true);
         const std::vector<game::Position> damageCells = buildUpWaveDamageCells(gameplayMap, stage >= 4);
         for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
             const bool hitGround = applyEnemyCombatResolution(
@@ -1025,7 +1082,10 @@ void Player::updateDownSlamCast(const std::string& gameplayMap,
     if (!downSlamCast.damageResolved && stage >= 2) {
         const game::CombatSystem combatSystem;
         game::AttackDefinition attack;
-        attack.damage = game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulSlam, id, true);
+        attack.damage = game::DamageInfo(game::getPlayerAttackDamage(stats, game::DamageType::SoulSlam),
+                                         game::DamageType::SoulSlam,
+                                         id,
+                                         true);
         const std::vector<game::Position> damageCells = buildDownSlamDamageCells(gameplayMap);
         for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
             applyEnemyCombatResolution(
@@ -1098,7 +1158,7 @@ void Player::updateProjectiles(const std::string& gameplayMap,
                 ? game::DamageType::SoulWaveUp
                 : game::DamageType::SoulWaveHorizontal;
         game::AttackDefinition attack;
-        attack.damage = game::DamageInfo(kPlayerAttackDamage, damageType, id, true);
+        attack.damage = game::DamageInfo(game::getPlayerAttackDamage(stats, damageType), damageType, id, true);
         if (applyEnemyCombatResolution(
                     groundEnemy,
                     combatSystem.resolveAttackAtPosition(groundEnemy, projectile.position, attack),
@@ -1242,6 +1302,7 @@ void Player::triggerDeathAnimation(const game::Position& center, const std::stri
     jumpHoldRemaining = 0.0f;
     minimumJumpRiseRemaining = 0.0f;
     riseVelocityDropAccumulator = 0.0f;
+    pendingBasicAttackRecoilDirection = 0;
     dashFramesRemaining = 0;
     dashCooldownFrames = 0;
     lastAction = "Death";

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "combat/CombatTuning.h"
+
 namespace {
 
 const std::vector<game::ShopOffer>& emptyOffers() {
@@ -118,10 +120,10 @@ Merchant::Merchant()
     ShopOffer attackOffer;
     attackOffer.id = "nail_edge";
     attackOffer.name = "Nail Edge";
-    attackOffer.description = "Attack level +1 as the smallest combat upgrade.";
+    attackOffer.description = "Raise nail damage from 5 to 6.";
     attackOffer.hkdCost = 55;
     attackOffer.bonusAttack = 1;
-    attackOffer.maxPurchaseCount = 2;
+    attackOffer.maxPurchaseCount = 1;
     offers.push_back(attackOffer);
 
     ShopOffer mobilityOffer;
@@ -171,6 +173,7 @@ NpcInteractionResult Merchant::buyOffer(const std::string& offerId, CharacterSta
     result.type = NpcInteractionType::Purchase;
     result.speaker = getDisplayName();
     result.offers = offers;
+    clampPlayerAttackPower(stats);
 
     const ShopOffer* offer = findOfferById(offers, offerId);
     if (offer == 0) {
@@ -191,7 +194,8 @@ NpcInteractionResult Merchant::buyOffer(const std::string& offerId, CharacterSta
         return result;
     }
 
-    if (offer->bonusAttack > 0 && stats.attackPower >= 1 + offer->maxPurchaseCount) {
+    if (offer->bonusAttack > 0 &&
+        clampPlayerAttackPowerLevel(stats.attackPower) >= kMaximumAttackPowerLevel) {
         result.text = "Nail Edge is sold out.";
         result.purchaseStatus = ShopPurchaseStatus::SoldOut;
         return result;
@@ -215,8 +219,9 @@ NpcInteractionResult Merchant::buyOffer(const std::string& offerId, CharacterSta
     }
 
     if (offer->bonusAttack > 0) {
-        stats.attackPower += offer->bonusAttack;
-        result.bonusAttackApplied = offer->bonusAttack;
+        const int previousAttackPower = clampPlayerAttackPowerLevel(stats.attackPower);
+        stats.attackPower = std::min(kMaximumAttackPowerLevel, previousAttackPower + offer->bonusAttack);
+        result.bonusAttackApplied = stats.attackPower - previousAttackPower;
     }
 
     if (offer->bonusAttackSpeed > 0) {

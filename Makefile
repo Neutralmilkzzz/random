@@ -45,6 +45,7 @@ HEADERS = include/player/Player.h \
           include/input/KeyStateManager.h \
           include/shared/GameTypes.h \
           include/combat/CombatSystem.h \
+          include/combat/CombatTuning.h \
           include/combat/SkillSystem.h \
           include/enemy/Enemy.h \
           include/world/WorldSystem.h \

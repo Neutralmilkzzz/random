@@ -1,15 +1,15 @@
 #include <algorithm>
 #include <cmath>
 
+#include "combat/CombatTuning.h"
 #include "enemy/Enemy.h"
 
 namespace game {
 
 namespace {
 
-const int kBossDefaultHealth = 355;
-const int kRangedBossHealth = 300;
-const int kBossDamagePerHit = 1;
+const int kBossDefaultHealth = kBossHealth;
+const int kRangedBossHealth = kBossHealth;
 
 char mirrorBossGlyph(char glyph) {
     switch (glyph) {
@@ -430,8 +430,8 @@ GroundEnemy::GroundEnemy(const std::string& enemyId, const Position& initialSpaw
       groundPlaneY(initialSpawnPosition.y),
       patrolDirection(1),
       dashAccumulator(0.0f) {
-    stats.health.current = 3;
-    stats.health.maximum = 3;
+    stats.health.current = kStandardEnemyHealth;
+    stats.health.maximum = kStandardEnemyHealth;
 }
 
 const std::string& GroundEnemy::getId() const {
@@ -819,8 +819,8 @@ FlyingEnemy::FlyingEnemy(const std::string& enemyId, const Position& initialSpaw
       deathMarkerSeconds(0.07f),
       deathAnimationRemaining(0.0f),
       hoverDirection(1) {
-    stats.health.current = 2;
-    stats.health.maximum = 2;
+    stats.health.current = kStandardEnemyHealth;
+    stats.health.maximum = kStandardEnemyHealth;
 }
 
 const std::string& FlyingEnemy::getId() const {
@@ -1171,7 +1171,7 @@ void Boss::takeDamage(const DamageInfo& damageInfo) {
         return;
     }
 
-    const int effectiveDamage = damageInfo.amount > 0 ? kBossDamagePerHit : 0;
+    const int effectiveDamage = std::max(0, damageInfo.amount);
     if (effectiveDamage <= 0) {
         return;
     }

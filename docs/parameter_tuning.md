@@ -70,7 +70,7 @@
 | npc_merchant | 商品 | merchant_vital_shell_cost | 40 | HKD | `Vital Shell` 价格，生命上限 +1 |
 | npc_merchant | 商品 | merchant_vital_shell_max_purchases | 2 | 次 | 生命强化当前最多购买 2 次 |
 | npc_merchant | 商品 | merchant_nail_edge_cost | 55 | HKD | `Nail Edge` 价格，攻击等级 +1 |
-| npc_merchant | 商品 | merchant_nail_edge_max_purchases | 2 | 次 | 攻击强化当前最多购买 2 次 |
+| npc_merchant | 商品 | merchant_nail_edge_max_purchases | 1 | 次 | 攻击强化当前最多购买 1 次；骨钉伤害由 5 提升到 6 |
 | npc_merchant | 商品 | merchant_double_jump_crest_cost | 90 | HKD | `Double Jump Crest` 价格，购买后解锁二段跳 |
 
 ## 5.2 NPC / 商店附带规则
@@ -99,13 +99,11 @@
 
 | 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| player | 骨钉伤害 | nail_damage_level_1 | 5 | 伤害 | 一级骨钉伤害 |
-| player | 骨钉伤害 | nail_damage_level_2 | 9 | 伤害 | 二级骨钉伤害，可在铁匠处升级获得 |
-| player | 骨钉伤害 | nail_damage_level_3 | 13 | 伤害 | 三级骨钉伤害，可在铁匠处升级获得 |
-| player | 骨钉伤害 | nail_damage_starting_value | 5 | 伤害 | 当前项目初始骨钉伤害按 5 处理 |
+| player | 骨钉伤害 | nail_damage_base | 5 | 伤害 | 当前初始骨钉伤害 |
+| player | 骨钉伤害 | nail_damage_nail_edge | 6 | 伤害 | 购买一次 `Nail Edge` 后的骨钉伤害 |
 | player | 法术伤害 | spell_horizontal_damage | 15 | 伤害 | 普通法术向左/右攻击伤害 |
-| player | 法术伤害 | spell_down_damage | 20 | 伤害 | 普通法术向下攻击伤害 |
-| player | 法术伤害 | spell_up_damage | 22 | 伤害 | 普通法术向上攻击伤害 |
+| player | 法术伤害 | spell_down_damage | 15 | 伤害 | 普通法术向下攻击伤害 |
+| player | 法术伤害 | spell_up_damage | 15 | 伤害 | 普通法术向上攻击伤害 |
 | player | 法术判定 | spell_up_vertical_reach | 5 | 格 | 向上法术的主伤害柱维持 5 格高度，不额外拉长 |
 | player | 法术判定 | spell_up_upper_spread_half_width | 1 | 格 | 向上法术中上段当前向左右各扩 1 格横向判定 |
 | player | 法术判定 | spell_up_crown_half_width | 2 | 格 | 向上法术顶端炸冠当前向左右各扩 2 格 |
@@ -114,9 +112,8 @@
 
 ## 9. 攻击伤害附带规则
 
-- 骨钉共有三级伤害档位：5、9、13。
-- 后两级骨钉可在铁匠处升级获得。
-- 当前项目起始骨钉伤害直接按 5 点处理。
+- 骨钉当前只保留两档伤害：初始 5、购买一次 `Nail Edge` 后 6。
+- `Nail Edge` 当前只允许 1 次有效购买，不再继续叠到 7+。
 - 当前向上法术保持原本 5 格高度，但把中上段横向外扩到 3 格宽，顶部炸冠扩到 5 格宽。
 - 当前向下法术在原本下坠柱基础上，额外覆盖落地点上一行的 3 格和落地点本行的 5 格。
 
@@ -124,8 +121,8 @@
 
 | 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| enemy_ground | 血量 | ground_enemy_health_current | 3 | 血量 | 地面普通敌人当前实装血量 |
-| enemy_ground | 血量 | ground_enemy_health_max | 3 | 血量 | 地面普通敌人最大血量 |
+| enemy_ground | 血量 | ground_enemy_health_current | 15 | 血量 | 地面普通敌人当前实装血量 |
+| enemy_ground | 血量 | ground_enemy_health_max | 15 | 血量 | 地面普通敌人最大血量 |
 | enemy_ground | 索敌 | ground_enemy_aggro_range | 10 | 格 | 玩家进入该范围后开始追击 |
 | enemy_ground | 脱战 | ground_enemy_lose_aggro_range | 16 | 格 | 玩家超出该范围后停止追击并回归出生点 |
 | enemy_ground | 巡逻 | ground_enemy_patrol_range | 3 | 格 | 待机时围绕出生点左右巡逻的半径 |
@@ -139,7 +136,7 @@
 
 ## 11. 地面普通敌人附带规则
 
-- 地面普通敌人的血条当前按 3 格血量理解。
+- 地面普通敌人的血条当前按 15 格血量理解。
 - 地面普通敌人当前的主要攻击方式为：`!!!` 预警后向玩家方向 Dash。
 - 当前击杀地面普通敌人后，玩家会获得 10 HKD，并在玩家头顶短暂显示 `+10` 飘字。
 
@@ -147,8 +144,8 @@
 
 | 模块 | 机制 | 参数名 | 数值 | 单位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| enemy_flying | 血量 | flying_enemy_health_current | 2 | 血量 | 飞行敌人当前实装血量 |
-| enemy_flying | 血量 | flying_enemy_health_max | 2 | 血量 | 飞行敌人最大血量 |
+| enemy_flying | 血量 | flying_enemy_health_current | 15 | 血量 | 飞行敌人当前实装血量 |
+| enemy_flying | 血量 | flying_enemy_health_max | 15 | 血量 | 飞行敌人最大血量 |
 | enemy_flying | 索敌 | flying_enemy_aggro_range | 12 | 格 | 玩家进入该范围后，飞行敌人开始追踪 |
 | enemy_flying | 脱战 | flying_enemy_lose_aggro_range | 18 | 格 | 玩家超出该范围后停止追击并回到出生点 |
 | enemy_flying | 预警 | flying_enemy_alert_range | 8 | 格 | 玩家进入该范围后触发 `!!!` 并准备发射火球 |
@@ -189,13 +186,13 @@
 | boss_common | 受击反馈 | boss_hit_flash_duration | 0.12 | 秒 | Boss 受伤时短闪 `*` |
 | boss_common | 死亡反馈 | boss_death_flash_duration | 0.10 | 秒 | Boss 死亡第一阶段显示 `*` |
 | boss_common | 死亡反馈 | boss_death_marker_duration | 0.12 | 秒 | Boss 死亡第二阶段显示 `x` |
-| boss_melee | 血量 | boss_melee_health_current | 355 | 血量 | 当前近战 Boss 原型血量 |
+| boss_melee | 血量 | boss_melee_health_current | 200 | 血量 | 当前近战 Boss 原型血量 |
 | boss_melee | 硬直阈值 | boss_melee_stagger_threshold | 7 | 伤害 | 5 秒内累计达到该值时进入硬直 |
 | boss_melee | 前摇 | boss_melee_attack_startup | 0.45 | 秒 | 近战 Boss 常规攻击前摇 |
 | boss_melee | 恢复 | boss_melee_attack_recovery | 0.70 | 秒 | 近战 Boss 攻击后的恢复期 |
 | boss_melee | 硬直 | boss_melee_stagger_duration | 1.10 | 秒 | 当前近战 Boss 原型硬直时长 |
 | boss_melee | 奖励 | boss_melee_hkd_reward | 60 | HKD | 击杀近战 Boss 原型的奖励 |
-| boss_ranged | 血量 | boss_ranged_health_current | 300 | 血量 | 当前飞行/远程 Boss 原型血量 |
+| boss_ranged | 血量 | boss_ranged_health_current | 200 | 血量 | 当前飞行/远程 Boss 原型血量 |
 | boss_ranged | 硬直阈值 | boss_ranged_stagger_threshold | 6 | 伤害 | 5 秒内累计达到该值时进入硬直 |
 | boss_ranged | 前摇 | boss_ranged_attack_startup | 0.40 | 秒 | 远程 Boss 常规施法前摇 |
 | boss_ranged | 恢复 | boss_ranged_attack_recovery | 0.75 | 秒 | 远程 Boss 攻击后的恢复期 |
@@ -209,7 +206,7 @@
 - 当前 Boss 只先搭框架和测试沙盒，不代表最终 Boss 设计数值已经锁定。
 - 近战 Boss 原型当前包含：苏醒、贴近、横扫、冲刺斩、跳跃重锤、受击、硬直、死亡。
 - 远程 Boss 原型当前包含：苏醒、拉扯、火球散射、陨石点名、受击、硬直、死亡。
-- `BossSandbox` 当前按 `1/2` 刷两种 Boss：近战 Boss 为 355 血，飞行/远程 Boss 为 300 血，且每次命中固定只扣 1 点血；`H/J` 仍可直接验证受击、奖励和硬直结算。
+- `BossSandbox` 当前用 `H/J` 直接验证两种玩家输出：骨钉 5 伤、法术 15 伤；近战 Boss 和飞行/远程 Boss 当前都为 200 血，且正式主流程中的 Boss 受击已按实际伤害结算，不再强制每次只扣 1 点血。
 - 当前近战 Boss 视觉包装已切到固定画布的盔甲锤风格：本体以 `# ] o x` 为核心，横扫改为蓄力锤 + 地面冲击波，冲刺改为前压重撞，JumpSlash 改为跳跃重锤，硬直改为破甲露核。
 - 当前远程 Boss 视觉包装已切到浮空法杖祭司：本体以 `o / \ | ~` 为核心，常态做小幅悬停波动，近身时用短法杖横扫击退，中距离主打三连扇形火球，重招改为带 `^` 预警的陨石落点，硬直时表现为翼塌核亮，死亡时表现为法核碎裂成 `*`。
 

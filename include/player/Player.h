@@ -195,6 +195,7 @@ private:
     float minimumJumpRiseRemaining;
     float riseVelocityDropAccumulator;
     int horizontalInputDirection;
+    int pendingBasicAttackRecoilDirection;
     int dashFramesRemaining;
     int dashCooldownFrames;
     int dashDirection;
@@ -220,6 +221,7 @@ private:
     bool wasKeyDown(int keyCode) const;
     bool isJustPressed(int keyCode) const;
     bool canSpendSoul(int soulCost);
+    bool consumeBasicAttackRecoil(std::string& currentmap);
     void applyIncomingDamage(const game::DamageInfo& damageInfo,
                              const game::Position& playerPosition);
     void applyCombatReward(const game::RewardResolution& reward,

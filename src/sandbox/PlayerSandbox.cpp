@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "combat/CombatTuning.h"
 #include "enemy/Enemy.h"
 #include "input/KeyStateManager.h"
 #include "player/Player.h"
@@ -30,7 +31,6 @@ const int kDeathExpandFrames = 24;
 const int kDeathFullWhiteFrames = 10;
 const int kDeathTextFrames = 60;
 const int kSoulMeterMax = 99;
-const int kPlayerAttackDamage = 1;
 
 const std::string kArenaMap =
         "============================================================================\n"
@@ -994,7 +994,10 @@ void updateUpWaveCast(SandboxState& state,
             for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
                 if (enemyPosition.x == damageCells[cellIndex].x && enemyPosition.y == damageCells[cellIndex].y) {
                     enemies[enemyIndex].groundEnemy.takeDamage(
-                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulWaveUp, "player", true));
+                            game::DamageInfo(game::getPlayerAttackDamage(state.stats, game::DamageType::SoulWaveUp),
+                                             game::DamageType::SoulWaveUp,
+                                             "player",
+                                             true));
                     enemyHits++;
                     break;
                 }
@@ -1069,7 +1072,10 @@ void updateDownSlamCast(SandboxState& state,
             for (size_t cellIndex = 0; cellIndex < damageCells.size(); ++cellIndex) {
                 if (enemyPosition.x == damageCells[cellIndex].x && enemyPosition.y == damageCells[cellIndex].y) {
                     enemies[enemyIndex].groundEnemy.takeDamage(
-                            game::DamageInfo(kPlayerAttackDamage, game::DamageType::SoulSlam, "player", true));
+                            game::DamageInfo(game::getPlayerAttackDamage(state.stats, game::DamageType::SoulSlam),
+                                             game::DamageType::SoulSlam,
+                                             "player",
+                                             true));
                     enemyHits++;
                     break;
                 }
@@ -1166,7 +1172,10 @@ void updateProjectiles(SandboxState& state,
         if (applyDamageToEnemyAtPosition(
                 enemies,
                 projectile.position,
-                game::DamageInfo(kPlayerAttackDamage, damageType, "player", true))) {
+                game::DamageInfo(game::getPlayerAttackDamage(state.stats, damageType),
+                                 damageType,
+                                 "player",
+                                 true))) {
             state.lastAction = projectile.label;
             state.lastResult = "Projectile hit 1 ground enemy.";
             continue;
@@ -1666,7 +1675,10 @@ int main() {
                         groundEnemies,
                         playerPosition,
                         state.facing,
-                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::UpSlash, "player", true));
+                        game::DamageInfo(game::getPlayerAttackDamage(state.stats, game::DamageType::UpSlash),
+                                         game::DamageType::UpSlash,
+                                         "player",
+                                         true));
                 removeDefeatedGroundEnemies(groundEnemies, state);
 
                 if (enemyHits > 0) {
@@ -1684,7 +1696,10 @@ int main() {
                         groundEnemies,
                         playerPosition,
                         state.facing,
-                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::DownSlash, "player", true));
+                        game::DamageInfo(game::getPlayerAttackDamage(state.stats, game::DamageType::DownSlash),
+                                         game::DamageType::DownSlash,
+                                         "player",
+                                         true));
                 removeDefeatedGroundEnemies(groundEnemies, state);
 
                 if (enemyHits > 0) {
@@ -1702,7 +1717,10 @@ int main() {
                         groundEnemies,
                         playerPosition,
                         state.facing,
-                        game::DamageInfo(kPlayerAttackDamage, game::DamageType::BasicAttack, "player", true));
+                        game::DamageInfo(game::getPlayerAttackDamage(state.stats, game::DamageType::BasicAttack),
+                                         game::DamageType::BasicAttack,
+                                         "player",
+                                         true));
                 removeDefeatedGroundEnemies(groundEnemies, state);
                 const int defeatedThisHit = state.defeatedGroundEnemies - defeatedBefore;
 
